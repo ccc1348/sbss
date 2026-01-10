@@ -138,7 +138,7 @@ class Runner:
                 if not template_path.exists():
                     continue
 
-                template = cv2.imread(str(template_path))
+                template = core.imread_safe(template_path)
                 if template is None:
                     continue
 
@@ -309,7 +309,7 @@ def api_save_state(name):
         img_data = base64.b64decode(screenshot_b64)
         img_array = np.frombuffer(img_data, dtype=np.uint8)
         img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-        cv2.imwrite(str(template_path), img)
+        core.imwrite_safe(template_path, img)
     elif old_name and old_name != state_name:
         # 改名但沒新截圖，複製舊模板
         import shutil
@@ -396,7 +396,7 @@ def api_state_screenshot(name, state_name):
     if not template_path.exists():
         return jsonify({"error": "截圖不存在"}), 404
 
-    img = cv2.imread(str(template_path))
+    img = core.imread_safe(template_path)
     if img is None:
         return jsonify({"error": "讀取失敗"}), 500
 
@@ -509,11 +509,25 @@ def api_runner_stream():
 
 # ============ 主程式 ============
 
+def find_free_port(start_port=8080, max_attempts=10):
+    """尋找可用端口"""
+    import socket
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(("127.0.0.1", port))
+            sock.close()
+            return port
+        except OSError:
+            continue
+    raise RuntimeError(f"找不到可用端口 ({start_port}-{start_port + max_attempts - 1})")
+
+
 if __name__ == "__main__":
     import webbrowser
     import os
 
-    port = 8080
+    port = find_free_port(8080)
 
     print("啟動 Web 界面...")
     print(f"http://127.0.0.1:{port}")

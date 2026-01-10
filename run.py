@@ -9,6 +9,7 @@ import sys
 import os
 from multiprocessing import Process, Event
 
+import cv2
 import core
 
 
@@ -327,9 +328,9 @@ def record_state(profile_name, state_name):
     click_pos = core.adb_select_point(screenshot, title=f"{state_name} - 點擊位置")
     if not click_pos:
         print("已取消")
-        core.cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
         for _ in range(5):
-            core.cv2.waitKey(1)
+            cv2.waitKey(1)
         input("\n按 Enter 返回...")
         return
 
@@ -354,7 +355,7 @@ def record_state(profile_name, state_name):
     print("\n【步驟 3】儲存模板")
     template_path = core.get_template_path(state_name, profile_name)
     template_path.parent.mkdir(parents=True, exist_ok=True)
-    core.cv2.imwrite(str(template_path), screenshot)
+    core.imwrite_safe(template_path, screenshot)
     print(f"已儲存: {template_path}")
 
     # 儲存
@@ -365,9 +366,9 @@ def record_state(profile_name, state_name):
         print(f"  區域: {regions}")
 
     # 確保關閉所有 OpenCV 視窗
-    core.cv2.destroyAllWindows()
+    cv2.destroyAllWindows()
     for _ in range(5):
-        core.cv2.waitKey(1)
+        cv2.waitKey(1)
 
     input("\n按 Enter 返回...")
 
@@ -406,7 +407,7 @@ def test_state_menu(profile_name):
             print(f"  {state_name}: 缺少模板")
             continue
 
-        template = core.cv2.imread(str(path))
+        template = core.imread_safe(path)
         if template is None:
             print(f"  {state_name}: 無法讀取")
             continue

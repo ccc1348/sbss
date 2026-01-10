@@ -9,13 +9,110 @@ import time
 import random
 import json
 import os
+import sys
 import shutil
 import subprocess
 from pathlib import Path
 
-BASE_DIR = Path(__file__).parent
-SHARED_DIR = BASE_DIR / "shared"
-PROFILES_DIR = BASE_DIR / "profiles"
+
+# ============ 跨平台支援 ============
+
+def get_base_dir():
+    """取得程式根目錄（支援 PyInstaller）"""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 打包後
+        return Path(sys.executable).parent
+    return Path(__file__).parent
+
+
+def get_data_dir():
+    """取得資料目錄（跨平台，確保有寫入權限）"""
+    if sys.platform == "win32":
+        # Windows: %APPDATA%\auto-bs
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            data_dir = Path(appdata) / "auto-bs"
+        else:
+            # 備選：使用程式目錄
+            data_dir = get_base_dir()
+    else:
+        # Mac/Linux: 保持原樣（程式目錄）
+        data_dir = get_base_dir()
+
+    # 確保目錄存在
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
+
+
+def get_adb_path():
+    """取得 ADB 執行檔路徑（跨平台）"""
+    if sys.platform == "win32":
+        # Windows: 優先用內嵌的 platform-tools
+        bundled = get_base_dir() / "platform-tools" / "adb.exe"
+        if bundled.exists():
+            return str(bundled)
+
+        # 其次檢查常見安裝位置
+        common_paths = [
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Android" / "Sdk" / "platform-tools" / "adb.exe",
+            Path("C:/Android/platform-tools/adb.exe"),
+            Path("C:/Program Files/Android/android-sdk/platform-tools/adb.exe"),
+        ]
+        for p in common_paths:
+            if p.exists():
+                return str(p)
+
+    # Mac/Linux 或 Windows 無內嵌時：用系統 PATH
+    return "adb"
+
+
+def imread_safe(path):
+    """安全讀取圖片（支援中文路徑）"""
+    path_str = str(path)
+
+    if sys.platform == "win32":
+        # Windows 中文路徑：用二進位讀取 + imdecode
+        try:
+            with open(path, 'rb') as f:
+                img_bytes = f.read()
+            img = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
+            return img
+        except Exception:
+            return None
+    else:
+        # Mac/Linux：直接使用 imread
+        return cv2.imread(path_str)
+
+
+def imwrite_safe(path, img):
+    """安全寫入圖片（支援中文路徑）"""
+    path_str = str(path)
+
+    if sys.platform == "win32":
+        # Windows 中文路徑：用 imencode + 二進位寫入
+        try:
+            success, buffer = cv2.imencode('.png', img)
+            if success:
+                with open(path, 'wb') as f:
+                    f.write(buffer.tobytes())
+                return True
+            return False
+        except Exception:
+            return False
+    else:
+        # Mac/Linux：直接使用 imwrite
+        return cv2.imwrite(path_str, img)
+
+
+BASE_DIR = get_base_dir()
+DATA_DIR = get_data_dir()
+SHARED_DIR = DATA_DIR / "shared"
+PROFILES_DIR = DATA_DIR / "profiles"
+ADB_PATH = get_adb_path()
+
+# 確保必要目錄存在
+SHARED_DIR.mkdir(parents=True, exist_ok=True)
+PROFILES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ============ 設定載入 ============
@@ -180,7 +277,7 @@ def adb_list_devices():
     返回 [{"id": "localhost:5555", "name": "emulator-5554 (localhost:5555)"}, ...]
     """
     result = subprocess.run(
-        ["adb", "devices"],
+        [ADB_PATH, "devices"],
         capture_output=True, text=True
     )
 
@@ -230,7 +327,7 @@ def adb_connect(host="localhost", port=5555):
     """連接 ADB"""
     addr = f"{host}:{port}"
     result = subprocess.run(
-        ["adb", "connect", addr],
+        [ADB_PATH, "connect", addr],
         capture_output=True, text=True
     )
     return "connected" in result.stdout.lower()
@@ -239,7 +336,7 @@ def adb_connect(host="localhost", port=5555):
 def adb_get_resolution(device="localhost:5555"):
     """取得 Android 解析度"""
     result = subprocess.run(
-        ["adb", "-s", device, "shell", "wm", "size"],
+        [ADB_PATH, "-s", device, "shell", "wm", "size"],
         capture_output=True, text=True
     )
     if result.returncode == 0:
@@ -254,7 +351,7 @@ def adb_get_resolution(device="localhost:5555"):
 def adb_tap(x, y, device="localhost:5555"):
     """ADB 點擊指定座標"""
     result = subprocess.run(
-        ["adb", "-s", device, "shell", "input", "tap", str(x), str(y)],
+        [ADB_PATH, "-s", device, "shell", "input", "tap", str(x), str(y)],
         capture_output=True, text=True
     )
     return result.returncode == 0
@@ -263,7 +360,7 @@ def adb_tap(x, y, device="localhost:5555"):
 def adb_screenshot(device="localhost:5555"):
     """使用 ADB 截取 Android 畫面"""
     result = subprocess.run(
-        ["adb", "-s", device, "exec-out", "screencap", "-p"],
+        [ADB_PATH, "-s", device, "exec-out", "screencap", "-p"],
         capture_output=True
     )
     if result.returncode != 0 or not result.stdout:
@@ -282,7 +379,7 @@ def adb_save_template(name, profile_name, device="localhost:5555"):
 
     output_path = get_template_path(name, profile_name)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    cv2.imwrite(str(output_path), img)
+    imwrite_safe(output_path, img)
     return output_path
 
 
@@ -309,7 +406,7 @@ def adb_capture_touch(device="localhost:5555", timeout=30):
 
     # 啟動 getevent
     proc = subprocess.Popen(
-        ["adb", "-s", device, "shell", "getevent", "-l", "/dev/input/event2"],
+        [ADB_PATH, "-s", device, "shell", "getevent", "-l", "/dev/input/event2"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True
@@ -526,7 +623,7 @@ def load_templates(profile_name, states):
             print(f"  缺少: {state_name}.png")
             continue
 
-        img = cv2.imread(str(path))
+        img = imread_safe(path)
         if img is None:
             print(f"  警告: 無法讀取 {path}")
             continue
