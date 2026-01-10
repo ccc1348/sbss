@@ -458,9 +458,28 @@ def api_screenshot():
 
 # ============ 設備 API ============
 
+def scan_adb_ports():
+    """掃描常見 ADB 端口，找出正在監聽的"""
+    import socket
+    listening = []
+    # BlueStacks: 5555, 5565, 5575...  LDPlayer: 5555, 5556...  夜神: 62001...
+    for port in list(range(5555, 5600)) + [62001, 62025]:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.1)
+        result = sock.connect_ex(('127.0.0.1', port))
+        sock.close()
+        if result == 0:
+            listening.append(port)
+    return listening
+
+
 @app.route("/api/devices")
 def api_list_devices():
     """列出所有已連接的 ADB 設備"""
+    # 掃描並連接監聽中的 ADB 端口
+    for port in scan_adb_ports():
+        core.adb_connect(port=port)
+
     devices = core.adb_list_devices()
     return jsonify({"devices": devices})
 
