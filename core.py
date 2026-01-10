@@ -145,38 +145,6 @@ def toggle_state(profile_name, state_name, enabled):
         save_profile_config(profile_name, config)
 
 
-def copy_state(from_profile, to_profile, state_name, new_name=None):
-    """從其他 Profile 複製狀態"""
-    if new_name is None:
-        new_name = state_name
-
-    # 複製設定
-    from_config = get_profile_config(from_profile)
-    if state_name not in from_config.get("states", {}):
-        return False, "來源狀態不存在"
-
-    to_config = get_profile_config(to_profile)
-    if "states" not in to_config:
-        to_config["states"] = {}
-
-    # 檢查目標是否已存在
-    if new_name in to_config["states"]:
-        return False, f"目標已存在狀態「{new_name}」"
-
-    # 複製狀態設定
-    to_config["states"][new_name] = from_config["states"][state_name].copy()
-    save_profile_config(to_profile, to_config)
-
-    # 複製模板
-    from_template = get_template_path(state_name, from_profile)
-    to_template = get_template_path(new_name, to_profile)
-
-    if from_template.exists():
-        shutil.copy(from_template, to_template)
-
-    return True, f"已複製「{state_name}」到「{new_name}」"
-
-
 # ============ ADB 功能 ============
 
 def adb_connect(host="localhost", port=5555):

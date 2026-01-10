@@ -105,7 +105,6 @@ def profile_menu(profile_name):
         print()
         print("  [r] 運行")
         print("  [a] 新增狀態")
-        print("  [c] 從其他 Profile 複製")
         print("  [m] 編輯狀態")
         print("  [d] 刪除狀態")
         print("  [t] 切換啟用")
@@ -122,8 +121,6 @@ def profile_menu(profile_name):
             run_single_profile(profile_name)
         elif choice == 'a':
             add_state_menu(profile_name)
-        elif choice == 'c':
-            copy_state_menu(profile_name)
         elif choice == 'm':
             edit_state_menu(profile_name)
         elif choice == 'd':
@@ -321,79 +318,6 @@ def record_state(profile_name, state_name):
     core.cv2.destroyAllWindows()
     for _ in range(5):
         core.cv2.waitKey(1)
-
-    input("\n按 Enter 返回...")
-
-
-def copy_state_menu(profile_name):
-    """從其他 Profile 複製狀態"""
-    clear_screen()
-    print("=== 複製狀態 ===\n")
-
-    profiles = [p for p in core.get_profile_list() if p != profile_name]
-    if not profiles:
-        print("沒有其他 Profile")
-        input("\n按 Enter 返回...")
-        return
-
-    # 選擇來源 Profile
-    print("來源 Profile:")
-    for i, name in enumerate(profiles, 1):
-        states = core.get_states(name)
-        print(f"  [{i}] {name} ({len(states)} 狀態)")
-
-    print()
-    choice = input("選擇: ").strip()
-    try:
-        idx = int(choice) - 1
-        if idx < 0 or idx >= len(profiles):
-            return
-    except ValueError:
-        return
-
-    from_profile = profiles[idx]
-    from_states = core.get_states(from_profile)
-
-    if not from_states:
-        print("該 Profile 沒有狀態")
-        input("\n按 Enter 返回...")
-        return
-
-    # 選擇狀態
-    clear_screen()
-    print(f"=== 從 {from_profile} 複製 ===\n")
-
-    state_list = list(from_states.keys())
-    for i, name in enumerate(state_list, 1):
-        click = from_states[name].get("click", [])
-        print(f"  [{i}] {name} - {click}")
-
-    print()
-    print("  [a] 全部複製")
-    print()
-
-    choice = input("選擇: ").strip().lower()
-
-    if choice == 'a':
-        # 複製全部
-        copied = 0
-        for state_name in state_list:
-            success, msg = core.copy_state(from_profile, profile_name, state_name)
-            if success:
-                copied += 1
-                print(f"  複製: {state_name}")
-            else:
-                print(f"  跳過: {state_name} ({msg})")
-        print(f"\n已複製 {copied} 個狀態")
-    else:
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(state_list):
-                state_name = state_list[idx]
-                success, msg = core.copy_state(from_profile, profile_name, state_name)
-                print(f"\n{msg}")
-        except ValueError:
-            pass
 
     input("\n按 Enter 返回...")
 
