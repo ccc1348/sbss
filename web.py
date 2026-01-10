@@ -124,26 +124,30 @@ class Runner:
                 if not regions:
                     continue
 
-                # 比對每個區域
+                # 比對所有區域（全部通過才算匹配）
+                all_matched = True
+                min_score = 1.0
                 for region in regions:
                     frame_region = core.crop_region(screenshot, region)
                     template_region = core.crop_region(template, region)
                     score = core.match_region(frame_region, template_region)
-                    if score >= threshold:
-                        click = config.get("click", [])
-                        if click:
-                            self.log(f"匹配: {state_name} ({score:.2f}) → 點擊 {click}")
-                            core.adb_tap(click[0], click[1])
-
-                            # 點擊後等待
-                            delay = click_delay[0] + (click_delay[1] - click_delay[0]) * (time.time() % 1)
-                            time.sleep(delay)
-
-                        matched = True
-                        miss_count = 0
+                    min_score = min(min_score, score)
+                    if score < threshold:
+                        all_matched = False
                         break
 
-                if matched:
+                if all_matched:
+                    click = config.get("click", [])
+                    if click:
+                        self.log(f"匹配: {state_name} ({min_score:.2f}) → 點擊 {click}")
+                        core.adb_tap(click[0], click[1])
+
+                        # 點擊後等待
+                        delay = click_delay[0] + (click_delay[1] - click_delay[0]) * (time.time() % 1)
+                        time.sleep(delay)
+
+                    matched = True
+                    miss_count = 0
                     break
 
             if not matched:
@@ -451,6 +455,10 @@ def api_runner_stream():
         while True:
             status = runner.status
             log_count = len(runner.logs)
+
+            # 偵測 log 被清空（重新啟動時）
+            if log_count < last_log_count:
+                last_log_count = 0
 
             # 只在有變化時發送
             if status != last_status or log_count != last_log_count:
