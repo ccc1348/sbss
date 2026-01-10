@@ -29,11 +29,19 @@ jobs:
           Expand-Archive -Path "platform-tools.zip" -DestinationPath "."
         shell: pwsh
 
+      - name: Create data directories
+        run: |
+          mkdir -p shared
+          mkdir -p profiles
+          echo '{"resolution":[1080,1920],"match_threshold":0.8,"loop_interval":0.8,"long_interval":10,"miss_threshold":5,"start_delay":2,"click_delay":[0.8,1.5],"debug":false}' > shared/settings.json
+        shell: bash
+
       - name: Build with PyInstaller
         run: |
           pyinstaller --name "sbss" `
             --add-data "templates;templates" `
             --add-data "shared;shared" `
+            --add-data "profiles;profiles" `
             --add-data "platform-tools;platform-tools" `
             --noconsole `
             --noconfirm `
