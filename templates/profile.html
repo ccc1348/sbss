@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ name }} - Android 自動工具</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .back { color: #888; text-decoration: none; font-size: 24px; }
+        .back:hover { color: #fff; }
+        h1 { flex: 1; }
+        .delete-btn {
+            background: transparent;
+            border: 1px solid #e74c3c;
+            color: #e74c3c;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .delete-btn:hover { background: #e74c3c; color: #fff; }
+
+        /* 運行控制區 */
+        .runner-panel {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .runner-status {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #666;
+        }
+        .status-dot.running { background: #2ecc71; animation: pulse 1s infinite; }
+        .status-dot.paused { background: #f39c12; }
+        .status-dot.stopped { background: #666; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .runner-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-start { background: #2ecc71; color: #fff; }
+        .btn-start:hover:not(:disabled) { background: #27ae60; }
+        .btn-pause { background: #f39c12; color: #fff; }
+        .btn-pause:hover:not(:disabled) { background: #d68910; }
+        .btn-stop { background: #e74c3c; color: #fff; }
+        .btn-stop:hover:not(:disabled) { background: #c0392b; }
+        .log-area {
+            background: #0f1729;
+            border-radius: 8px;
+            padding: 15px;
+            height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .log-line { margin-bottom: 4px; }
+        .log-time { color: #666; }
+
+        /* 狀態列表 */
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .section-header h2 { font-size: 18px; }
+        .btn-add {
+            background: #4a69bd;
+            color: #fff;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .btn-add:hover { background: #3c5aa6; }
+        .state-list { list-style: none; }
+        .state-item {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: grab;
+        }
+        .state-item:active { cursor: grabbing; }
+        .state-item.dragging { opacity: 0.5; }
+        .state-item.drag-over { border: 2px dashed #4a69bd; }
+        .drag-handle { color: #666; cursor: grab; }
+        .state-toggle {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid #2ecc71;
+            background: transparent;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #2ecc71;
+            font-size: 14px;
+        }
+        .state-toggle.disabled { border-color: #666; color: #666; }
+        .state-info { flex: 1; }
+        .state-name { font-weight: 500; margin-bottom: 4px; }
+        .state-detail { font-size: 13px; color: #888; }
+        .state-actions { display: flex; gap: 8px; }
+        .btn-small {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            background: #333;
+            color: #fff;
+        }
+        .btn-small:hover { background: #444; }
+        .btn-small.danger { background: #c0392b; }
+        .btn-small.danger:hover { background: #e74c3c; }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back">&larr;</a>
+            <h1>{{ name }}</h1>
+            <button class="delete-btn" onclick="deleteProfile()">刪除腳本</button>
+        </div>
+
+        <!-- 運行控制 -->
+        <div class="runner-panel">
+            <div class="runner-status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">已停止</span>
+            </div>
+            <div class="runner-buttons">
+                <button class="btn btn-start" id="btnStart" onclick="startRunner()">啟動</button>
+                <button class="btn btn-pause" id="btnPause" onclick="pauseRunner()" disabled>暫停</button>
+                <button class="btn btn-stop" id="btnStop" onclick="stopRunner()" disabled>停止</button>
+            </div>
+            <div class="log-area" id="logArea"></div>
+        </div>
+
+        <!-- 狀態列表 -->
+        <div class="section-header">
+            <h2>步驟（執行順序）</h2>
+            <a href="/profile/{{ name }}/add" class="btn-add">+ 新增步驟</a>
+        </div>
+
+        <ul class="state-list" id="stateList">
+            {% if states %}
+                {% for state_name, config in states.items() %}
+                <li class="state-item" draggable="true" data-name="{{ state_name }}">
+                    <span class="drag-handle">☰</span>
+                    <button class="state-toggle {{ 'disabled' if not config.get('enabled', true) }}"
+                            onclick="toggleState('{{ state_name }}')">
+                        {{ '✓' if config.get('enabled', true) else '' }}
+                    </button>
+                    <div class="state-info">
+                        <div class="state-name">{{ state_name }}</div>
+                        <div class="state-detail">點擊 {{ config.get('click', []) }}</div>
+                    </div>
+                    <div class="state-actions">
+                        <a href="/profile/{{ name }}/edit/{{ state_name }}" class="btn-small">編輯</a>
+                        <button class="btn-small {{ 'danger' if config.get('enabled', true) else '' }}"
+                                onclick="toggleState('{{ state_name }}')">
+                            {{ '停用' if config.get('enabled', true) else '啟用' }}
+                        </button>
+                        <button class="btn-small danger" onclick="deleteState('{{ state_name }}')">刪除</button>
+                    </div>
+                </li>
+                {% endfor %}
+            {% else %}
+                <li class="empty-state">尚無步驟，點擊「+ 新增」開始</li>
+            {% endif %}
+        </ul>
+    </div>
+
+    <script>
+        const profileName = "{{ name }}";
+
+        // ========== 運行控制 ==========
+        async function startRunner() {
+            const res = await fetch(`/api/runner/start/${encodeURIComponent(profileName)}`, { method: 'POST' });
+            const data = await res.json();
+            if (!data.success) alert(data.message);
+        }
+
+        async function pauseRunner() {
+            await fetch('/api/runner/pause', { method: 'POST' });
+        }
+
+        async function resumeRunner() {
+            await fetch('/api/runner/resume', { method: 'POST' });
+        }
+
+        async function stopRunner() {
+            await fetch('/api/runner/stop', { method: 'POST' });
+        }
+
+        function updateRunnerUI(status) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            const btnStart = document.getElementById('btnStart');
+            const btnPause = document.getElementById('btnPause');
+            const btnStop = document.getElementById('btnStop');
+
+            dot.className = 'status-dot ' + status;
+
+            if (status === 'running') {
+                text.textContent = '運行中';
+                btnStart.disabled = true;
+                btnPause.disabled = false;
+                btnPause.textContent = '暫停';
+                btnPause.onclick = pauseRunner;
+                btnStop.disabled = false;
+            } else if (status === 'paused') {
+                text.textContent = '已暫停';
+                btnStart.disabled = true;
+                btnPause.disabled = false;
+                btnPause.textContent = '繼續';
+                btnPause.onclick = resumeRunner;
+                btnStop.disabled = false;
+            } else {
+                text.textContent = '已停止';
+                btnStart.disabled = false;
+                btnPause.disabled = true;
+                btnStop.disabled = true;
+            }
+        }
+
+        function updateLogs(logs) {
+            const area = document.getElementById('logArea');
+            logs.forEach(log => {
+                const line = document.createElement('div');
+                line.className = 'log-line';
+                line.innerHTML = `<span class="log-time">${log.time}</span> ${log.msg}`;
+                area.appendChild(line);
+            });
+            area.scrollTop = area.scrollHeight;
+        }
+
+        // SSE 串流
+        const eventSource = new EventSource('/api/runner/stream');
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            updateRunnerUI(data.status);
+            if (data.logs.length > 0) {
+                updateLogs(data.logs);
+            }
+        };
+        eventSource.onerror = () => {
+            console.log('SSE connection lost, reconnecting...');
+        };
+
+        // ========== 狀態管理 ==========
+        async function toggleState(stateName) {
+            const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/state/${encodeURIComponent(stateName)}/toggle`, {
+                method: 'POST'
+            });
+            if (res.ok) location.reload();
+        }
+
+        async function deleteState(stateName) {
+            if (!confirm(`確定刪除「${stateName}」？`)) return;
+
+            const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/state/${encodeURIComponent(stateName)}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) location.reload();
+        }
+
+        async function deleteProfile() {
+            if (!confirm(`確定刪除腳本「${profileName}」？\n所有步驟和截圖都會被刪除。`)) return;
+
+            const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) window.location.href = '/';
+        }
+
+        // ========== 拖拽排序 ==========
+        const stateList = document.getElementById('stateList');
+        let dragItem = null;
+
+        stateList.addEventListener('dragstart', (e) => {
+            if (e.target.classList.contains('state-item')) {
+                dragItem = e.target;
+                e.target.classList.add('dragging');
+            }
+        });
+
+        stateList.addEventListener('dragend', (e) => {
+            if (e.target.classList.contains('state-item')) {
+                e.target.classList.remove('dragging');
+                dragItem = null;
+                saveOrder();
+            }
+        });
+
+        stateList.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const item = e.target.closest('.state-item');
+            if (item && item !== dragItem) {
+                const rect = item.getBoundingClientRect();
+                const mid = rect.top + rect.height / 2;
+                if (e.clientY < mid) {
+                    item.parentNode.insertBefore(dragItem, item);
+                } else {
+                    item.parentNode.insertBefore(dragItem, item.nextSibling);
+                }
+            }
+        });
+
+        async function saveOrder() {
+            const items = stateList.querySelectorAll('.state-item[data-name]');
+            const order = Array.from(items).map(item => item.dataset.name);
+
+            await fetch(`/api/profile/${encodeURIComponent(profileName)}/reorder`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order })
+            });
+        }
+    </script>
+</body>
+</html>

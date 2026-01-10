@@ -6,10 +6,7 @@ __pycache__/
 # macOS
 .DS_Store
 
-# 舊版模板目錄
-templates/
-
-# 新版目錄結構（每個人不同）
+# 用戶資料（每個人不同）
 shared/
 profiles/
 

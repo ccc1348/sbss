@@ -1,6 +1,6 @@
-# BlueStacks 自動化腳本
+# Android 自動工具
 
-透過 ADB 監控 BlueStacks 畫面，自動辨識遊戲狀態並點擊。支援多開、跨平台（macOS/Windows）。
+透過 ADB 自動辨識畫面並點擊，適用於 BlueStacks 等模擬器。支援多開、跨平台（macOS/Windows）。
 
 ## 需求
 
@@ -17,23 +17,42 @@ python3 -m venv venv
 
 ## 使用
 
+### Web 界面（推薦）
+
+```bash
+./venv/bin/python web.py
+```
+
+自動開啟瀏覽器，在網頁上操作：
+- 管理 腳本 和步驟
+- 截圖選擇點擊位置和區域
+- 拖拽排序步驟
+- 啟動/暫停/停止運行
+- 即時日誌顯示
+
+### 命令行界面
+
 ```bash
 ./venv/bin/python run.py
 ```
 
 ### 主選單
-- 選擇 Profile 進入操作
-- `[+]` 新增 Profile
+- 選擇 腳本 進入操作
+- `[+]` 新增 腳本
 - `[r]` 併行運行
 - `[s]` 設定
 
-### Profile 選單
+### 腳本 選單
+- 輸入數字選擇步驟
+- `[a]` 新增步驟
 - `[r]` 運行
-- `[a]` 新增狀態
-- `[m]` 編輯狀態
-- `[d]` 刪除狀態
-- `[t]` 切換啟用
 - `[e]` 測試比對
+
+### 步驟選單
+- `[m]` 編輯（重新錄製）
+- `[d]` 刪除
+- `[t]` 切換啟用
+- `[u]` 上移 / `[j]` 下移
 
 ## 目錄結構
 
@@ -45,8 +64,8 @@ auto-bs/
 │   └── settings.json       # 共用設定
 └── profiles/
     └── <profile_name>/
-        ├── config.json     # 狀態設定
-        └── templates/      # 模板截圖
+        ├── config.json     # 步驟設定
+        └── templates/      # 步驟截圖
 ```
 
 ## 設定說明
@@ -81,7 +100,7 @@ auto-bs/
 ```json
 {
   "states": {
-    "狀態名稱": {
+    "步驟名稱": {
       "click": [540, 960],
       "region": [100, 200, 300, 400],
       "enabled": true
@@ -99,7 +118,7 @@ auto-bs/
 
 ### 解析度共用
 - BlueStacks 解析度相同，設定完全共用
-- 可複製整個 Profile 到其他機器
+- 可複製整個 腳本 到其他機器
 
 ## 多開
 

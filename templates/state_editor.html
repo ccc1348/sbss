@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ '新增' if is_new else '編輯' }}步驟 - {{ profile }}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .back { color: #888; text-decoration: none; font-size: 24px; }
+        .back:hover { color: #fff; }
+        h1 { flex: 1; font-size: 20px; }
+
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+
+        /* 截圖區 */
+        .screenshot-area {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .screenshot-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .screenshot-header h2 { flex: 1; font-size: 16px; }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary { background: #4a69bd; color: #fff; }
+        .btn-primary:hover { background: #3c5aa6; }
+        .btn-secondary { background: #333; color: #fff; }
+        .btn-secondary:hover { background: #444; }
+        .btn-success { background: #2ecc71; color: #fff; }
+        .btn-success:hover { background: #27ae60; }
+
+        .canvas-container {
+            position: relative;
+            display: inline-block;
+            background: #0f1729;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #canvas {
+            display: block;
+            cursor: crosshair;
+        }
+        .placeholder {
+            padding: 100px 50px;
+            text-align: center;
+            color: #666;
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .mode-btn {
+            padding: 8px 16px;
+            border: 2px solid #333;
+            background: transparent;
+            color: #888;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .mode-btn.active {
+            border-color: #4a69bd;
+            color: #4a69bd;
+        }
+
+        /* 側邊欄 */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .panel {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .panel h3 {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 15px;
+        }
+        .form-group { margin-bottom: 15px; }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            background: #0f1729;
+            color: #fff;
+            font-size: 14px;
+        }
+        .form-group input:focus { outline: 2px solid #4a69bd; }
+
+        .coord-display {
+            font-family: monospace;
+            background: #0f1729;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .coord-display.empty { color: #666; }
+
+        .region-list { list-style: none; }
+        .region-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            background: #0f1729;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .region-item .color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+        .region-item span { flex: 1; }
+        .region-item button {
+            background: transparent;
+            border: none;
+            color: #e74c3c;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .empty-regions { color: #666; font-size: 13px; }
+
+        .save-area {
+            margin-top: auto;
+        }
+        .btn-save {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+        }
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/profile/{{ profile }}" class="back">&larr;</a>
+            <h1>{{ '新增' if is_new else '編輯' }}步驟</h1>
+        </div>
+
+        <div class="main">
+            <div class="screenshot-area">
+                <div class="screenshot-header">
+                    <h2>截圖</h2>
+                    <button class="btn btn-secondary" onclick="takeScreenshot()">重新截圖</button>
+                </div>
+
+                <div class="mode-buttons">
+                    <button class="mode-btn active" id="modeClick" onclick="setMode('click')">選擇點擊位置</button>
+                    <button class="mode-btn" id="modeRegion" onclick="setMode('region')">選擇區域</button>
+                </div>
+
+                <div class="canvas-container" id="canvasContainer">
+                    <div class="placeholder" id="placeholder">
+                        點擊「重新截圖」取得畫面
+                    </div>
+                    <canvas id="canvas" style="display:none;"></canvas>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="panel">
+                    <h3>步驟名稱</h3>
+                    <div class="form-group">
+                        <input type="text" id="stateName" value="{{ state_name or '' }}"
+                               placeholder="例：進入副本">
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>點擊位置</h3>
+                    <div class="coord-display {{ 'empty' if not config or not config.get('click') else '' }}" id="clickDisplay">
+                        {% if config and config.get('click') %}
+                            ({{ config.click[0] }}, {{ config.click[1] }})
+                        {% else %}
+                            點擊截圖選擇
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>比對區域</h3>
+                    <ul class="region-list" id="regionList">
+                        {% if config %}
+                            {% if config.get('region') %}
+                                <li class="region-item">
+                                    <div class="color" style="background: #e74c3c"></div>
+                                    <span>{{ config.region }}</span>
+                                    <button onclick="removeRegion(0)">&times;</button>
+                                </li>
+                            {% elif config.get('regions') %}
+                                {% for r in config.regions %}
+                                <li class="region-item">
+                                    <div class="color" style="background: {{ ['#e74c3c','#3498db','#2ecc71','#f39c12'][loop.index0 % 4] }}"></div>
+                                    <span>{{ r }}</span>
+                                    <button onclick="removeRegion({{ loop.index0 }})">&times;</button>
+                                </li>
+                                {% endfor %}
+                            {% endif %}
+                        {% endif %}
+                    </ul>
+                    <div class="empty-regions" id="emptyRegions" {% if config and (config.get('region') or config.get('regions')) %}style="display:none"{% endif %}>
+                        拖拽截圖選擇區域
+                    </div>
+                </div>
+
+                <div class="panel save-area">
+                    <button class="btn btn-success btn-save" onclick="saveState()">儲存</button>
+                    <div class="help-text">
+                        1. 先截圖<br>
+                        2. 點擊選擇「點擊位置」<br>
+                        3. 切換到「選擇區域」拖拽選擇特徵區域<br>
+                        4. 儲存
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const profileName = "{{ profile }}";
+        const isNew = {{ 'true' if is_new else 'false' }};
+
+        let canvas, ctx;
+        let imageData = null;  // base64
+        let imageWidth = 0;
+        let imageHeight = 0;
+        let scale = 1;
+
+        let mode = 'click';  // click or region
+        let clickPos = {{ config.click | tojson if config and config.get('click') else 'null' }};
+        let regions = [];
+
+        // 初始化已有區域
+        {% if config %}
+            {% if config.get('region') %}
+                regions = [{{ config.region | tojson }}];
+            {% elif config.get('regions') %}
+                regions = {{ config.regions | tojson }};
+            {% endif %}
+        {% endif %}
+
+        const regionColors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12'];
+
+        // 拖拽步驟
+        let isDragging = false;
+        let dragStart = null;
+        let dragEnd = null;
+
+        function setMode(m) {
+            mode = m;
+            document.getElementById('modeClick').classList.toggle('active', m === 'click');
+            document.getElementById('modeRegion').classList.toggle('active', m === 'region');
+        }
+
+        async function takeScreenshot() {
+            const res = await fetch('/api/screenshot');
+            const data = await res.json();
+
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            imageData = data.image;
+            imageWidth = data.width;
+            imageHeight = data.height;
+
+            // 顯示 canvas
+            document.getElementById('placeholder').style.display = 'none';
+            canvas = document.getElementById('canvas');
+            canvas.style.display = 'block';
+            ctx = canvas.getContext('2d');
+
+            // 計算縮放
+            const maxWidth = 700;
+            scale = Math.min(maxWidth / imageWidth, 1);
+            canvas.width = imageWidth * scale;
+            canvas.height = imageHeight * scale;
+
+            // 載入圖片
+            const img = new Image();
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                drawOverlays();
+            };
+            img.src = 'data:image/png;base64,' + imageData;
+
+            // 綁定事件
+            canvas.onmousedown = onMouseDown;
+            canvas.onmousemove = onMouseMove;
+            canvas.onmouseup = onMouseUp;
+            canvas.onmouseleave = onMouseUp;
+        }
+
+        function drawOverlays() {
+            if (!ctx || !imageData) return;
+
+            // 重繪圖片
+            const img = new Image();
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                // 畫區域
+                regions.forEach((r, i) => {
+                    ctx.strokeStyle = regionColors[i % regionColors.length];
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(
+                        r[0] * scale,
+                        r[1] * scale,
+                        (r[2] - r[0]) * scale,
+                        (r[3] - r[1]) * scale
+                    );
+                });
+
+                // 畫拖拽中的區域
+                if (isDragging && dragStart && dragEnd) {
+                    ctx.strokeStyle = '#fff';
+                    ctx.setLineDash([5, 5]);
+                    ctx.lineWidth = 2;
+                    const x = Math.min(dragStart.x, dragEnd.x);
+                    const y = Math.min(dragStart.y, dragEnd.y);
+                    const w = Math.abs(dragEnd.x - dragStart.x);
+                    const h = Math.abs(dragEnd.y - dragStart.y);
+                    ctx.strokeRect(x, y, w, h);
+                    ctx.setLineDash([]);
+                }
+
+                // 畫點擊位置
+                if (clickPos) {
+                    const x = clickPos[0] * scale;
+                    const y = clickPos[1] * scale;
+
+                    ctx.strokeStyle = '#2ecc71';
+                    ctx.lineWidth = 2;
+
+                    // 十字
+                    ctx.beginPath();
+                    ctx.moveTo(x - 15, y);
+                    ctx.lineTo(x + 15, y);
+                    ctx.moveTo(x, y - 15);
+                    ctx.lineTo(x, y + 15);
+                    ctx.stroke();
+
+                    // 圓點
+                    ctx.fillStyle = '#2ecc71';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            };
+            img.src = 'data:image/png;base64,' + imageData;
+        }
+
+        function onMouseDown(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (mode === 'click') {
+                clickPos = [Math.round(x / scale), Math.round(y / scale)];
+                updateClickDisplay();
+                drawOverlays();
+            } else {
+                isDragging = true;
+                dragStart = { x, y };
+                dragEnd = { x, y };
+            }
+        }
+
+        function onMouseMove(e) {
+            if (!isDragging) return;
+
+            const rect = canvas.getBoundingClientRect();
+            dragEnd = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            drawOverlays();
+        }
+
+        function onMouseUp(e) {
+            if (!isDragging) return;
+            isDragging = false;
+
+            if (dragStart && dragEnd) {
+                const x1 = Math.round(Math.min(dragStart.x, dragEnd.x) / scale);
+                const y1 = Math.round(Math.min(dragStart.y, dragEnd.y) / scale);
+                const x2 = Math.round(Math.max(dragStart.x, dragEnd.x) / scale);
+                const y2 = Math.round(Math.max(dragStart.y, dragEnd.y) / scale);
+
+                // 至少 10x10
+                if (x2 - x1 > 10 && y2 - y1 > 10) {
+                    regions.push([x1, y1, x2, y2]);
+                    updateRegionList();
+                }
+            }
+
+            dragStart = null;
+            dragEnd = null;
+            drawOverlays();
+        }
+
+        function updateClickDisplay() {
+            const el = document.getElementById('clickDisplay');
+            if (clickPos) {
+                el.textContent = `(${clickPos[0]}, ${clickPos[1]})`;
+                el.classList.remove('empty');
+            } else {
+                el.textContent = '點擊截圖選擇';
+                el.classList.add('empty');
+            }
+        }
+
+        function updateRegionList() {
+            const list = document.getElementById('regionList');
+            const empty = document.getElementById('emptyRegions');
+
+            list.innerHTML = '';
+            regions.forEach((r, i) => {
+                const li = document.createElement('li');
+                li.className = 'region-item';
+                li.innerHTML = `
+                    <div class="color" style="background: ${regionColors[i % regionColors.length]}"></div>
+                    <span>[${r.join(', ')}]</span>
+                    <button onclick="removeRegion(${i})">&times;</button>
+                `;
+                list.appendChild(li);
+            });
+
+            empty.style.display = regions.length ? 'none' : 'block';
+        }
+
+        function removeRegion(index) {
+            regions.splice(index, 1);
+            updateRegionList();
+            drawOverlays();
+        }
+
+        async function saveState() {
+            const name = document.getElementById('stateName').value.trim();
+
+            if (!name) {
+                alert('請輸入步驟名稱');
+                return;
+            }
+            if (!clickPos) {
+                alert('請選擇點擊位置');
+                return;
+            }
+            if (regions.length === 0) {
+                alert('請選擇至少一個區域');
+                return;
+            }
+            if (!imageData && isNew) {
+                alert('請先截圖');
+                return;
+            }
+
+            const payload = {
+                name: name,
+                click: clickPos,
+                regions: regions,
+                screenshot: imageData
+            };
+
+            // 編輯模式：傳遞舊名稱以便處理重命名
+            if (!isNew) {
+                payload.old_name = "{{ state_name or '' }}";
+            }
+
+            const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/state`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                window.location.href = `/profile/${encodeURIComponent(profileName)}`;
+            } else {
+                alert(data.error || '儲存失敗');
+            }
+        }
+
+        // 如果是編輯模式，自動載入已有截圖
+        {% if not is_new %}
+        async function loadExistingScreenshot() {
+            const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/state/${encodeURIComponent("{{ state_name }}")}/screenshot`);
+            const data = await res.json();
+
+            if (data.error) {
+                console.log('No existing screenshot');
+                return;
+            }
+
+            imageData = data.image;
+            imageWidth = data.width;
+            imageHeight = data.height;
+
+            // 顯示 canvas
+            document.getElementById('placeholder').style.display = 'none';
+            canvas = document.getElementById('canvas');
+            canvas.style.display = 'block';
+            ctx = canvas.getContext('2d');
+
+            // 計算縮放
+            const maxWidth = 700;
+            scale = Math.min(maxWidth / imageWidth, 1);
+            canvas.width = imageWidth * scale;
+            canvas.height = imageHeight * scale;
+
+            // 載入圖片
+            const img = new Image();
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                drawOverlays();
+            };
+            img.src = 'data:image/png;base64,' + imageData;
+
+            // 綁定事件
+            canvas.onmousedown = onMouseDown;
+            canvas.onmousemove = onMouseMove;
+            canvas.onmouseup = onMouseUp;
+            canvas.onmouseleave = onMouseUp;
+        }
+
+        loadExistingScreenshot();
+        {% endif %}
+    </script>
+</body>
+</html>

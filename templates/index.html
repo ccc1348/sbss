@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android 自動工具</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 30px;
+        }
+        h1 { margin-bottom: 10px; color: #fff; }
+        .subtitle { color: #888; font-size: 14px; }
+        .settings-btn {
+            background: #333;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .settings-btn:hover { background: #444; }
+
+        .section-title {
+            font-size: 16px;
+            color: #888;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #333;
+        }
+
+        .scripts {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 40px;
+        }
+        .script-card {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-decoration: none;
+            color: inherit;
+        }
+        .script-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            background: #1a2744;
+        }
+        .script-card h3 { margin-bottom: 8px; }
+        .add-card {
+            background: transparent;
+            border: 2px dashed #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            color: #444;
+            min-height: 100px;
+        }
+        .add-card:hover { border-color: #666; color: #666; }
+
+        .help-section {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 25px;
+        }
+        .help-section h2 {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: #fff;
+        }
+        .help-steps {
+            display: grid;
+            gap: 15px;
+        }
+        .help-step {
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+        }
+        .step-num {
+            width: 28px;
+            height: 28px;
+            background: #4a69bd;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        .step-content h4 { margin-bottom: 5px; font-size: 14px; }
+        .step-content p { color: #888; font-size: 13px; line-height: 1.5; }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: #16213e;
+            padding: 30px;
+            border-radius: 12px;
+            min-width: 300px;
+        }
+        .modal h2 { margin-bottom: 20px; }
+        .modal input {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: #0f1729;
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        .modal input:focus { outline: 2px solid #4a69bd; }
+        .modal-buttons { display: flex; gap: 10px; }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .btn-primary { background: #4a69bd; color: #fff; }
+        .btn-primary:hover { background: #3c5aa6; }
+        .btn-secondary { background: #333; color: #fff; }
+        .btn-secondary:hover { background: #444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>Android 自動工具</h1>
+                <p class="subtitle">透過 ADB 自動辨識畫面並點擊，適用於 BlueStacks 等模擬器</p>
+            </div>
+            <a href="/settings" class="settings-btn">設定</a>
+        </div>
+
+        <div class="section-title">我的腳本</div>
+        <div class="scripts">
+            {% for profile in profiles %}
+            <a href="/profile/{{ profile }}" class="script-card">
+                <h3>{{ profile }}</h3>
+            </a>
+            {% endfor %}
+
+            <div class="script-card add-card" onclick="showAddModal()">+</div>
+        </div>
+
+        <div class="help-section">
+            <h2>使用說明</h2>
+            <div class="help-steps">
+                <div class="help-step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>建立腳本</h4>
+                        <p>點擊 + 新增一個腳本，例如「刷副本」、「自動日常」</p>
+                    </div>
+                </div>
+                <div class="help-step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>新增步驟</h4>
+                        <p>每個步驟定義「看到什麼畫面 → 點擊哪裡」。截圖後選擇要辨識的區域和點擊位置</p>
+                    </div>
+                </div>
+                <div class="help-step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h4>調整順序</h4>
+                        <p>拖拽步驟調整執行優先順序。程式會依序比對，匹配到就點擊</p>
+                    </div>
+                </div>
+                <div class="help-step">
+                    <div class="step-num">4</div>
+                    <div class="step-content">
+                        <h4>啟動運行</h4>
+                        <p>點擊「啟動」開始自動化。可隨時暫停或停止</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="addModal">
+        <div class="modal-content">
+            <h2>新增腳本</h2>
+            <input type="text" id="scriptName" placeholder="腳本名稱" autofocus>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="hideAddModal()">取消</button>
+                <button class="btn btn-primary" onclick="createScript()">建立</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showAddModal() {
+            document.getElementById('addModal').classList.add('show');
+            document.getElementById('scriptName').focus();
+        }
+
+        function hideAddModal() {
+            document.getElementById('addModal').classList.remove('show');
+            document.getElementById('scriptName').value = '';
+        }
+
+        async function createScript() {
+            const name = document.getElementById('scriptName').value.trim();
+            if (!name) return;
+
+            const res = await fetch('/api/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+
+            if (res.ok) {
+                window.location.href = '/profile/' + encodeURIComponent(name);
+            } else {
+                const data = await res.json();
+                alert(data.error || '建立失敗');
+            }
+        }
+
+        document.getElementById('scriptName').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') createScript();
+        });
+
+        document.getElementById('addModal').addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) hideAddModal();
+        });
+    </script>
+</body>
+</html>

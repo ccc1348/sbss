@@ -145,6 +145,33 @@ def toggle_state(profile_name, state_name, enabled):
         save_profile_config(profile_name, config)
 
 
+def move_state(profile_name, state_name, direction):
+    """
+    移動狀態順序
+    direction: -1 上移, 1 下移
+    """
+    config = get_profile_config(profile_name)
+    states = config.get("states", {})
+    keys = list(states.keys())
+
+    if state_name not in keys:
+        return False
+
+    idx = keys.index(state_name)
+    new_idx = idx + direction
+
+    if new_idx < 0 or new_idx >= len(keys):
+        return False
+
+    # 交換位置
+    keys[idx], keys[new_idx] = keys[new_idx], keys[idx]
+
+    # 重建 dict
+    config["states"] = {k: states[k] for k in keys}
+    save_profile_config(profile_name, config)
+    return True
+
+
 # ============ ADB 功能 ============
 
 def adb_connect(host="localhost", port=5555):

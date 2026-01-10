@@ -85,6 +85,7 @@ def profile_menu(profile_name):
     while True:
         clear_screen()
         states = core.get_states(profile_name)
+        state_list = list(states.keys())
 
         print("=" * 50)
         print(f"  {profile_name}")
@@ -92,25 +93,20 @@ def profile_menu(profile_name):
         print()
 
         if states:
-            print("狀態:")
-            for name, config in states.items():
+            print("狀態（執行順序）:")
+            for i, name in enumerate(state_list, 1):
+                config = states[name]
                 enabled = config.get("enabled", True)
-                status = "" if enabled else " [停用]"
+                status = "✓" if enabled else "✗"
                 click = config.get("click", [])
-                regions = get_regions_display(config)
-                print(f"  - {name}{status}: 點擊 {click}, {regions}")
+                print(f"  [{i}] {status} {name} - {click}")
         else:
             print("(無狀態)")
 
         print()
-        print("  [r] 運行")
-        print("  [a] 新增狀態")
-        print("  [m] 編輯狀態")
-        print("  [d] 刪除狀態")
-        print("  [t] 切換啟用")
-        print("  [e] 測試比對")
-        print("  [x] 刪除 Profile")
-        print("  [b] 返回")
+        print("輸入數字選擇狀態，或:")
+        print("  [a] 新增  [r] 運行  [e] 測試比對")
+        print("  [x] 刪除 Profile  [b] 返回")
         print()
 
         choice = input("選擇: ").strip().lower()
@@ -121,17 +117,71 @@ def profile_menu(profile_name):
             run_single_profile(profile_name)
         elif choice == 'a':
             add_state_menu(profile_name)
-        elif choice == 'm':
-            edit_state_menu(profile_name)
-        elif choice == 'd':
-            remove_state_menu(profile_name)
-        elif choice == 't':
-            toggle_state_menu(profile_name)
         elif choice == 'e':
             test_state_menu(profile_name)
         elif choice == 'x':
             if delete_profile_confirm(profile_name):
                 return
+        else:
+            # 嘗試解析數字
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(state_list):
+                    state_menu(profile_name, state_list[idx])
+            except ValueError:
+                pass
+
+
+def state_menu(profile_name, state_name):
+    """單一狀態選單"""
+    while True:
+        clear_screen()
+        states = core.get_states(profile_name)
+
+        if state_name not in states:
+            return
+
+        config = states[state_name]
+        enabled = config.get("enabled", True)
+        click = config.get("click", [])
+        regions = get_regions_display(config)
+
+        # 找出目前位置
+        state_list = list(states.keys())
+        idx = state_list.index(state_name)
+
+        print("=" * 50)
+        print(f"  {state_name}")
+        print("=" * 50)
+        print()
+        print(f"  狀態: {'啟用' if enabled else '停用'}")
+        print(f"  點擊: {click}")
+        print(f"  區域: {regions}")
+        print(f"  順序: {idx + 1} / {len(state_list)}")
+        print()
+        print("  [m] 編輯  [d] 刪除  [t] 切換啟用")
+        print("  [u] 上移  [j] 下移")
+        print("  [b] 返回")
+        print()
+
+        choice = input("選擇: ").strip().lower()
+
+        if choice == 'b':
+            return
+        elif choice == 'm':
+            record_state(profile_name, state_name)
+        elif choice == 'd':
+            if input(f"刪除「{state_name}」？(y/n): ").strip().lower() == 'y':
+                core.remove_state(profile_name, state_name)
+                print("已刪除")
+                input("\n按 Enter 返回...")
+                return
+        elif choice == 't':
+            core.toggle_state(profile_name, state_name, not enabled)
+        elif choice == 'u':
+            core.move_state(profile_name, state_name, -1)
+        elif choice == 'j':
+            core.move_state(profile_name, state_name, 1)
 
 
 # ============ 運行 ============
@@ -319,103 +369,6 @@ def record_state(profile_name, state_name):
     for _ in range(5):
         core.cv2.waitKey(1)
 
-    input("\n按 Enter 返回...")
-
-
-def edit_state_menu(profile_name):
-    """編輯狀態（重新錄製）"""
-    states = core.get_states(profile_name)
-    if not states:
-        print("無狀態")
-        input("\n按 Enter 返回...")
-        return
-
-    clear_screen()
-    print("=== 編輯狀態 ===\n")
-
-    state_list = list(states.keys())
-    for i, name in enumerate(state_list, 1):
-        click = states[name].get("click", [])
-        regions = core.get_regions(states[name])
-        print(f"  [{i}] {name}: {click}, {len(regions) if regions else 0} 區域")
-
-    print()
-    choice = input("選擇: ").strip()
-    try:
-        idx = int(choice) - 1
-        if idx < 0 or idx >= len(state_list):
-            return
-    except ValueError:
-        return
-
-    state_name = state_list[idx]
-
-    # 重新錄製（流程跟新增一樣）
-    record_state(profile_name, state_name)
-
-
-def remove_state_menu(profile_name):
-    """刪除狀態"""
-    states = core.get_states(profile_name)
-    if not states:
-        print("無狀態")
-        input("\n按 Enter 返回...")
-        return
-
-    clear_screen()
-    print("=== 刪除狀態 ===\n")
-
-    state_list = list(states.keys())
-    for i, name in enumerate(state_list, 1):
-        print(f"  [{i}] {name}")
-
-    print()
-    choice = input("選擇: ").strip()
-    try:
-        idx = int(choice) - 1
-        if idx < 0 or idx >= len(state_list):
-            return
-    except ValueError:
-        return
-
-    name = state_list[idx]
-    if input(f"刪除「{name}」？(y/n): ").strip().lower() == 'y':
-        success, msg = core.remove_state(profile_name, name)
-        print(msg)
-
-    input("\n按 Enter 返回...")
-
-
-def toggle_state_menu(profile_name):
-    """切換啟用"""
-    states = core.get_states(profile_name)
-    if not states:
-        print("無狀態")
-        input("\n按 Enter 返回...")
-        return
-
-    clear_screen()
-    print("=== 切換啟用 ===\n")
-
-    state_list = list(states.keys())
-    for i, name in enumerate(state_list, 1):
-        enabled = states[name].get("enabled", True)
-        status = "啟用" if enabled else "停用"
-        print(f"  [{i}] {name} - {status}")
-
-    print()
-    choice = input("選擇: ").strip()
-    try:
-        idx = int(choice) - 1
-        if idx < 0 or idx >= len(state_list):
-            return
-    except ValueError:
-        return
-
-    name = state_list[idx]
-    current = states[name].get("enabled", True)
-    core.toggle_state(profile_name, name, not current)
-    print(f"已{'停用' if current else '啟用'}: {name}")
     input("\n按 Enter 返回...")
 
 
