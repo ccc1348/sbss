@@ -440,26 +440,50 @@ def create_profile_menu():
     if not name or name.lower() == 'q':
         return
 
-    # 設定視窗位置
-    print("\n設定視窗位置：")
-    print("請把滑鼠移到視窗【左上角】，然後按 Enter...")
-    input()
-    left, top = pyautogui.position()
-    print(f"左上角: ({left}, {top})")
+    # 嘗試自動偵測 BlueStacks 視窗
+    windows = core.get_bluestacks_windows()
+    reference_window = None
 
-    print("請把滑鼠移到視窗【右下角】，然後按 Enter...")
-    input()
-    right, bottom = pyautogui.position()
-    print(f"右下角: ({right}, {bottom})")
+    if windows:
+        print("\n偵測到 BlueStacks 視窗:")
+        for i, w in enumerate(windows, 1):
+            print(f"  [{i}] {w['title']} - ({w['left']}, {w['top']}) - ({w['right']}, {w['bottom']})")
+        print()
+        print("  [m] 手動設定")
+        print("  [b] 取消")
+        print()
 
-    window = {
-        "left": min(left, right),
-        "top": min(top, bottom),
-        "right": max(left, right),
-        "bottom": max(top, bottom)
-    }
+        choice = input("選擇視窗: ").strip().lower()
 
-    success, msg = core.create_profile(name, window)
+        if choice == 'b':
+            return
+        elif choice == 'm':
+            window = set_window_manually()
+            if not window:
+                return
+        else:
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(windows):
+                    w = windows[idx]
+                    window = {"left": w["left"], "top": w["top"], "right": w["right"], "bottom": w["bottom"]}
+                    reference_window = window.copy()  # 自動偵測的位置作為參考
+                else:
+                    print("無效選擇")
+                    input("\n按 Enter 返回...")
+                    return
+            except ValueError:
+                return
+    else:
+        print("\n未偵測到 BlueStacks 視窗")
+        confirm = input("要手動設定嗎？(y/n): ").strip().lower()
+        if confirm != 'y':
+            return
+        window = set_window_manually()
+        if not window:
+            return
+
+    success, msg = core.create_profile(name, window, reference_window)
     print(f"\n{msg}")
 
     input("\n按 Enter 返回...")
@@ -488,10 +512,74 @@ def set_window_position(profile_name):
 
     config = core.get_profile_config(profile_name)
     current = config.get("window", {})
-    print(f"目前: ({current.get('left')}, {current.get('top')}) - ({current.get('right')}, {current.get('bottom')})")
+    reference = config.get("reference_window", current)
+    print(f"目前截圖區域: ({current.get('left')}, {current.get('top')}) - ({current.get('right')}, {current.get('bottom')})")
+    print(f"參考位置:     ({reference.get('left')}, {reference.get('top')}) - ({reference.get('right')}, {reference.get('bottom')})")
     print()
 
-    print("請把滑鼠移到視窗【左上角】，然後按 Enter...")
+    # 嘗試自動偵測
+    windows = core.get_bluestacks_windows()
+    detected_window = None
+
+    if windows:
+        print("偵測到 BlueStacks 視窗:")
+        for i, w in enumerate(windows, 1):
+            print(f"  [{i}] {w['title']} - ({w['left']}, {w['top']}) - ({w['right']}, {w['bottom']})")
+        print()
+        print("  [m] 手動設定")
+        print("  [b] 取消")
+        print()
+
+        choice = input("選擇: ").strip().lower()
+
+        if choice == 'b':
+            return
+        elif choice == 'm':
+            window = set_window_manually()
+            if not window:
+                return
+        else:
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(windows):
+                    w = windows[idx]
+                    window = {"left": w["left"], "top": w["top"], "right": w["right"], "bottom": w["bottom"]}
+                    detected_window = window.copy()
+                else:
+                    print("無效選擇")
+                    input("\n按 Enter 返回...")
+                    return
+            except ValueError:
+                return
+    else:
+        print("未偵測到 BlueStacks 視窗，請確認 BlueStacks 已開啟")
+        print()
+        confirm = input("要手動設定嗎？(y/n): ").strip().lower()
+        if confirm != 'y':
+            return
+        window = set_window_manually()
+        if not window:
+            return
+
+    config["window"] = window
+    print(f"\n截圖區域已更新: ({window['left']}, {window['top']}) - ({window['right']}, {window['bottom']})")
+
+    # 詢問是否也更新參考位置
+    if detected_window:
+        print()
+        update_ref = input("是否也更新參考位置？(錄製新狀態時使用) (y/n): ").strip().lower()
+        if update_ref == 'y':
+            config["reference_window"] = detected_window
+            print(f"參考位置已更新: ({detected_window['left']}, {detected_window['top']}) - ({detected_window['right']}, {detected_window['bottom']})")
+
+    core.save_profile_config(profile_name, config)
+
+    input("\n按 Enter 返回...")
+
+
+def set_window_manually():
+    """手動設定視窗位置"""
+    print("\n請把滑鼠移到視窗【左上角】，然後按 Enter...")
     input()
     left, top = pyautogui.position()
     print(f"左上角: ({left}, {top})")
@@ -501,17 +589,12 @@ def set_window_position(profile_name):
     right, bottom = pyautogui.position()
     print(f"右下角: ({right}, {bottom})")
 
-    config["window"] = {
+    return {
         "left": min(left, right),
         "top": min(top, bottom),
         "right": max(left, right),
         "bottom": max(top, bottom)
     }
-
-    core.save_profile_config(profile_name, config)
-    print("\n視窗位置已更新")
-
-    input("\n按 Enter 返回...")
 
 
 def edit_shared_settings():

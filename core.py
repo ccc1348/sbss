@@ -12,6 +12,7 @@ import os
 import shutil
 from pathlib import Path
 from PIL import Image
+import Quartz
 
 BASE_DIR = Path(__file__).parent
 SHARED_DIR = BASE_DIR / "shared"
@@ -114,7 +115,7 @@ def get_template_path(state_name, profile_name):
 
 # ============ Profile 管理 ============
 
-def create_profile(profile_name, window=None):
+def create_profile(profile_name, window=None, reference_window=None):
     """建立新 Profile"""
     profile_dir = get_profile_dir(profile_name)
     if profile_dir.exists():
@@ -123,8 +124,10 @@ def create_profile(profile_name, window=None):
     profile_dir.mkdir(parents=True)
     (profile_dir / "templates").mkdir()
 
+    default_window = {"left": 0, "top": 0, "right": 400, "bottom": 800}
     config = {
-        "window": window or {"left": 0, "top": 0, "right": 400, "bottom": 800},
+        "window": window or default_window,
+        "reference_window": reference_window or window or default_window,
         "override_states": {},
         "local_states": {}
     }
@@ -140,6 +143,41 @@ def delete_profile(profile_name):
 
     shutil.rmtree(profile_dir)
     return True, "刪除成功"
+
+
+# ============ 視窗偵測 ============
+
+def get_bluestacks_windows():
+    """取得所有 BlueStacks 視窗位置"""
+    windows = []
+    window_list = Quartz.CGWindowListCopyWindowInfo(
+        Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
+        Quartz.kCGNullWindowID
+    )
+
+    for win in window_list:
+        owner = win.get(Quartz.kCGWindowOwnerName, "")
+        if owner == "BlueStacks":
+            bounds = win.get("kCGWindowBounds", {})
+            if bounds:
+                windows.append({
+                    "title": win.get(Quartz.kCGWindowName, "BlueStacks"),
+                    "left": int(bounds["X"]),
+                    "top": int(bounds["Y"]),
+                    "right": int(bounds["X"] + bounds["Width"]),
+                    "bottom": int(bounds["Y"] + bounds["Height"])
+                })
+
+    return windows
+
+
+def get_single_bluestacks_window():
+    """取得單一 BlueStacks 視窗（如果只有一個）"""
+    windows = get_bluestacks_windows()
+    if len(windows) == 1:
+        w = windows[0]
+        return {"left": w["left"], "top": w["top"], "right": w["right"], "bottom": w["bottom"]}
+    return None
 
 
 # ============ 狀態管理 ============
@@ -354,11 +392,12 @@ def match_region(frame_region, template_region):
     return max_val
 
 
-def match_state(current_frame, templates, states, window, scale, threshold):
+def match_state(current_frame, templates, states, window, scale, threshold, offset=(0, 0)):
     """比對當前畫面與所有模板"""
     best_match = None
     best_confidence = 0
     all_scores = {}
+    offset_x, offset_y = offset
 
     for state_name, template_list in templates.items():
         state_config = states[state_name]
@@ -371,7 +410,14 @@ def match_state(current_frame, templates, states, window, scale, threshold):
 
         if regions:
             for i, (region, template) in enumerate(zip(regions, template_list)):
-                frame_region = crop_region(current_frame, region, window, scale)
+                # 套用偏移到 region
+                adjusted_region = [
+                    region[0] + offset_x,
+                    region[1] + offset_y,
+                    region[2] + offset_x,
+                    region[3] + offset_y
+                ]
+                frame_region = crop_region(current_frame, adjusted_region, window, scale)
                 if frame_region is None:
                     region_scores.append(0)
                     continue
@@ -404,7 +450,33 @@ def run_automation(profile_name, stop_event=None):
     profile_config = get_profile_config(profile_name)
     states = get_merged_states(profile_name)
 
-    window = profile_config["window"]
+    # 載入視窗設定
+    config_window = profile_config["window"]
+    reference_window = profile_config.get("reference_window", config_window)
+
+    # 嘗試自動偵測當前視窗位置
+    detected = get_single_bluestacks_window()
+    if detected:
+        current_window = detected
+        offset_x = current_window["left"] - reference_window["left"]
+        offset_y = current_window["top"] - reference_window["top"]
+        print(f"偵測到視窗位置: ({current_window['left']}, {current_window['top']})")
+        if offset_x != 0 or offset_y != 0:
+            print(f"相對參考位置偏移: ({offset_x:+d}, {offset_y:+d})")
+    else:
+        current_window = config_window
+        offset_x = 0
+        offset_y = 0
+        print("未偵測到視窗，使用設定值")
+
+    # 計算截圖用的視窗區域（套用偏移到原本的 config_window）
+    window = {
+        "left": config_window["left"] + offset_x,
+        "top": config_window["top"] + offset_y,
+        "right": config_window["right"] + offset_x,
+        "bottom": config_window["bottom"] + offset_y
+    }
+
     scale = settings["scale"]
     threshold = settings["match_threshold"]
     short_interval = settings["loop_interval"]
@@ -416,7 +488,8 @@ def run_automation(profile_name, stop_event=None):
 
     print(f"\n=== Profile: {profile_name} ===")
     print("載入狀態模板...")
-    templates = load_templates(profile_name, states, window, scale)
+    # 模板是用原始 config_window 截的，所以用 config_window 載入
+    templates = load_templates(profile_name, states, config_window, scale)
 
     if not templates:
         print("錯誤: 沒有可用的模板")
@@ -440,7 +513,8 @@ def run_automation(profile_name, stop_event=None):
 
             current_frame = capture_window(window, scale)
             state, confidence, all_scores = match_state(
-                current_frame, templates, states, window, scale, threshold
+                current_frame, templates, states, window, scale, threshold,
+                offset=(offset_x, offset_y)
             )
 
             if debug:
@@ -449,7 +523,8 @@ def run_automation(profile_name, stop_event=None):
                 print(f"[DEBUG] [{interval_mode}] {scores_str}")
 
             if state:
-                x, y = states[state]["click"]
+                orig_x, orig_y = states[state]["click"]
+                x, y = orig_x + offset_x, orig_y + offset_y
                 print(f">>> [{state}] {confidence:.2f} -> 點擊 ({x}, {y})")
                 click_at(x, y, click_delay)
                 consecutive_misses = 0
