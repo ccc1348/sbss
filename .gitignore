@@ -6,11 +6,15 @@ __pycache__/
 # macOS
 .DS_Store
 
-# 截圖模板（每個人不同）
+# 舊版模板目錄
 templates/
+
+# 新版目錄結構（每個人不同）
+shared/
+profiles/
 
 # 測試截圖
 *.png
 
-# 個人設定（座標因人而異）
+# 舊版設定
 config.json
