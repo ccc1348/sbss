@@ -43,6 +43,45 @@
         }
         .delete-btn:hover { background: #e74c3c; color: #fff; }
 
+        .device-bar {
+            background: #0d1b2a;
+            border: 1px solid #1f4068;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .device-bar-label { color: #888; font-size: 14px; }
+        .device-bar select {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            background: #16213e;
+            color: #fff;
+            font-size: 14px;
+            min-width: 200px;
+            cursor: pointer;
+        }
+        .device-bar select:focus { outline: 2px solid #4a69bd; }
+        .device-bar button {
+            background: #333;
+            border: none;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .device-bar button:hover { background: #444; }
+        .device-bar .status {
+            margin-left: auto;
+            font-size: 13px;
+        }
+        .device-bar .status.connected { color: #2ecc71; }
+        .device-bar .status.disconnected { color: #e74c3c; }
+
         /* 運行控制區 */
         .runner-panel {
             background: #16213e;
@@ -218,6 +257,15 @@
 </head>
 <body>
     <div class="container">
+        <div class="device-bar">
+            <span class="device-bar-label">控制設備：</span>
+            <select id="globalDevice" onchange="saveDevice()">
+                <option value="">載入中...</option>
+            </select>
+            <button onclick="refreshDevices()">重新整理</button>
+            <span class="status" id="deviceStatus"></span>
+        </div>
+
         <div class="header">
             <a href="/" class="back">&larr;</a>
             <h1>
@@ -232,12 +280,6 @@
             <div class="runner-status">
                 <div class="status-dot" id="statusDot"></div>
                 <span id="statusText">已停止</span>
-            </div>
-            <div class="runner-row">
-                <select id="deviceSelect" class="device-select">
-                    <option value="">載入設備中...</option>
-                </select>
-                <button class="btn btn-refresh" id="btnRefresh" onclick="loadDevices()" title="重新整理設備">↻</button>
             </div>
             <div class="runner-row">
                 <button class="btn btn-start" id="btnStart" onclick="startRunner()">啟動</button>
@@ -296,9 +338,12 @@
         const profileName = "{{ name }}";
 
         // ========== 設備管理 ==========
-        async function loadDevices() {
-            const select = document.getElementById('deviceSelect');
-            select.innerHTML = '<option value="">載入中...</option>';
+        async function refreshDevices() {
+            const select = document.getElementById('globalDevice');
+            const status = document.getElementById('deviceStatus');
+            select.innerHTML = '<option value="">掃描中...</option>';
+            status.textContent = '';
+            status.className = 'status';
 
             try {
                 const res = await fetch('/api/devices');
@@ -306,23 +351,47 @@
                 const devices = data.devices || [];
 
                 if (devices.length === 0) {
-                    select.innerHTML = '<option value="">無設備（請先開啟模擬器）</option>';
+                    select.innerHTML = '<option value="">未偵測到設備</option>';
+                    status.textContent = '請開啟模擬器';
+                    status.className = 'status disconnected';
                 } else {
                     select.innerHTML = devices.map(d =>
                         `<option value="${d.id}">${d.name}</option>`
                     ).join('');
+
+                    // 恢復上次選擇
+                    const saved = localStorage.getItem('selectedDevice');
+                    if (saved && devices.some(d => d.id === saved)) {
+                        select.value = saved;
+                    }
+                    saveDevice();
+                    status.textContent = '已連線';
+                    status.className = 'status connected';
                 }
             } catch (e) {
                 select.innerHTML = '<option value="">載入失敗</option>';
+                status.textContent = '連線錯誤';
+                status.className = 'status disconnected';
             }
         }
 
-        // 頁面載入時取得設備列表
-        loadDevices();
+        function saveDevice() {
+            const device = document.getElementById('globalDevice').value;
+            if (device) {
+                localStorage.setItem('selectedDevice', device);
+            }
+        }
+
+        function getSelectedDevice() {
+            return localStorage.getItem('selectedDevice') || '';
+        }
+
+        // 頁面載入時刷新設備
+        refreshDevices();
 
         // ========== 運行控制 ==========
         async function startRunner() {
-            const device = document.getElementById('deviceSelect').value;
+            const device = getSelectedDevice();
             if (!device) {
                 alert('請先選擇設備');
                 return;
@@ -346,8 +415,7 @@
             const text = document.getElementById('statusText');
             const btnStart = document.getElementById('btnStart');
             const btnStop = document.getElementById('btnStop');
-            const deviceSelect = document.getElementById('deviceSelect');
-            const btnRefresh = document.getElementById('btnRefresh');
+            const globalDevice = document.getElementById('globalDevice');
 
             dot.className = 'status-dot ' + status;
 
@@ -355,14 +423,12 @@
                 text.textContent = '運行中';
                 btnStart.disabled = true;
                 btnStop.disabled = false;
-                deviceSelect.disabled = true;
-                btnRefresh.disabled = true;
+                globalDevice.disabled = true;
             } else {
                 text.textContent = '已停止';
                 btnStart.disabled = false;
                 btnStop.disabled = true;
-                deviceSelect.disabled = false;
-                btnRefresh.disabled = false;
+                globalDevice.disabled = false;
             }
         }
 
