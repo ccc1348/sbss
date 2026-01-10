@@ -28,10 +28,10 @@ def get_base_dir():
 def get_data_dir():
     """取得資料目錄（跨平台，確保有寫入權限）"""
     if sys.platform == "win32":
-        # Windows: %APPDATA%\auto-bs
+        # Windows: %APPDATA%\sbss
         appdata = os.environ.get("APPDATA")
         if appdata:
-            data_dir = Path(appdata) / "auto-bs"
+            data_dir = Path(appdata) / "sbss"
         else:
             # 備選：使用程式目錄
             data_dir = get_base_dir()

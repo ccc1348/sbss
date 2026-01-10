@@ -57,7 +57,7 @@ python3 -m venv venv
 ## 目錄結構
 
 ```
-auto-bs/
+sbss/
 ├── run.py                  # 入口
 ├── core.py                 # 核心
 ├── shared/
