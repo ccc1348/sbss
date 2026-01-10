@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-BlueStacks 自動化工具 - 統一入口
-支援多 Profile 管理與併行運行
+BlueStacks 自動化工具
+純 ADB 模式 - 跨平台支援
 """
 
 import readline  # 改善中文輸入
 import sys
 import os
-import pyautogui
 from multiprocessing import Process, Event
 
 import core
@@ -35,7 +34,7 @@ def get_regions_display(state_config):
 # ============ 主選單 ============
 
 def main_menu():
-    """主選單：選擇 Profile"""
+    """主選單"""
     while True:
         clear_screen()
         print_header()
@@ -44,21 +43,18 @@ def main_menu():
         profiles = core.get_profile_list()
 
         if profiles:
-            print("現有 Profiles:")
+            print("Profiles:")
             for i, name in enumerate(profiles, 1):
-                config = core.get_profile_config(name)
-                window = config.get("window", {})
-                pos = f"({window.get('left', '?')}, {window.get('top', '?')})"
-                states = core.get_merged_states(name)
-                enabled_count = sum(1 for s in states.values() if s.get("enabled", True))
-                print(f"  [{i}] {name} - 視窗: {pos} | 狀態: {enabled_count}/{len(states)}")
+                states = core.get_states(name)
+                enabled = sum(1 for s in states.values() if s.get("enabled", True))
+                print(f"  [{i}] {name} ({enabled}/{len(states)} 狀態)")
         else:
             print("(尚無任何 Profile)")
 
         print()
         print("  [+] 新增 Profile")
-        print("  [r] 併行運行多個 Profile")
-        print("  [s] 編輯共用設定")
+        print("  [r] 併行運行")
+        print("  [s] 設定")
         print("  [q] 離開")
         print()
 
@@ -72,7 +68,7 @@ def main_menu():
         elif choice == 'r':
             run_multiple_profiles(profiles)
         elif choice == 's':
-            edit_shared_settings()
+            show_settings()
         else:
             try:
                 idx = int(choice) - 1
@@ -85,31 +81,36 @@ def main_menu():
 # ============ Profile 選單 ============
 
 def profile_menu(profile_name):
-    """Profile 內部選單"""
+    """Profile 選單"""
     while True:
         clear_screen()
-        config = core.get_profile_config(profile_name)
-        states = core.get_merged_states(profile_name)
-        settings = core.get_shared_settings()
-
-        window = config.get("window", {})
-        shared_count = sum(1 for s in states.values() if s.get("_source") == "shared")
-        local_count = sum(1 for s in states.values() if s.get("_source") == "local")
+        states = core.get_states(profile_name)
 
         print("=" * 50)
-        print(f"  Profile: {profile_name}")
+        print(f"  {profile_name}")
         print("=" * 50)
         print()
-        print(f"  視窗位置: ({window.get('left')}, {window.get('top')}) - ({window.get('right')}, {window.get('bottom')})")
-        print(f"  共用狀態: {shared_count} | 本地狀態: {local_count}")
+
+        if states:
+            print("狀態:")
+            for name, config in states.items():
+                enabled = config.get("enabled", True)
+                status = "" if enabled else " [停用]"
+                click = config.get("click", [])
+                regions = get_regions_display(config)
+                print(f"  - {name}{status}: 點擊 {click}, {regions}")
+        else:
+            print("(無狀態)")
+
         print()
-        print("  [r] 運行自動化")
-        print("  [l] 列出所有狀態")
+        print("  [r] 運行")
         print("  [a] 新增狀態")
+        print("  [c] 從其他 Profile 複製")
+        print("  [m] 編輯狀態")
         print("  [d] 刪除狀態")
-        print("  [t] 切換狀態啟用")
-        print("  [w] 設定視窗位置")
-        print("  [x] 刪除此 Profile")
+        print("  [t] 切換啟用")
+        print("  [e] 測試比對")
+        print("  [x] 刪除 Profile")
         print("  [b] 返回")
         print()
 
@@ -119,29 +120,30 @@ def profile_menu(profile_name):
             return
         elif choice == 'r':
             run_single_profile(profile_name)
-        elif choice == 'l':
-            list_states(profile_name)
         elif choice == 'a':
             add_state_menu(profile_name)
+        elif choice == 'c':
+            copy_state_menu(profile_name)
+        elif choice == 'm':
+            edit_state_menu(profile_name)
         elif choice == 'd':
             remove_state_menu(profile_name)
         elif choice == 't':
             toggle_state_menu(profile_name)
-        elif choice == 'w':
-            set_window_position(profile_name)
+        elif choice == 'e':
+            test_state_menu(profile_name)
         elif choice == 'x':
             if delete_profile_confirm(profile_name):
                 return
 
 
-# ============ 運行功能 ============
+# ============ 運行 ============
 
 def run_single_profile(profile_name):
     """運行單一 Profile"""
     clear_screen()
-    print(f"準備運行 Profile: {profile_name}")
-    print("按 Ctrl+C 停止")
-    print()
+    print(f"運行: {profile_name}")
+    print("按 Ctrl+C 停止\n")
 
     try:
         core.run_automation(profile_name)
@@ -152,7 +154,7 @@ def run_single_profile(profile_name):
 
 
 def run_multiple_profiles(profiles):
-    """併行運行多個 Profile"""
+    """併行運行"""
     if not profiles:
         print("沒有可用的 Profile")
         input("\n按 Enter 返回...")
@@ -161,15 +163,11 @@ def run_multiple_profiles(profiles):
     clear_screen()
     print("=== 併行運行 ===\n")
 
-    print("可用 Profiles:")
     for i, name in enumerate(profiles, 1):
         print(f"  [{i}] {name}")
 
     print()
-    print("輸入要運行的編號（用空格分隔，如 '1 2 3'）")
-    print("或輸入 'all' 運行全部")
-    print()
-
+    print("輸入編號（空格分隔）或 'all'")
     choice = input("選擇: ").strip().lower()
 
     if choice == 'all':
@@ -184,12 +182,10 @@ def run_multiple_profiles(profiles):
             return
 
     if not selected:
-        print("未選擇任何 Profile")
-        input("\n按 Enter 返回...")
         return
 
-    print(f"\n將運行: {', '.join(selected)}")
-    print("按 Ctrl+C 停止所有\n")
+    print(f"\n運行: {', '.join(selected)}")
+    print("按 Ctrl+C 停止\n")
 
     processes = []
     stop_events = []
@@ -203,415 +199,407 @@ def run_multiple_profiles(profiles):
             processes.append(p)
             print(f"啟動: {name} (PID: {p.pid})")
 
-        print("\n所有 Profile 已啟動，等待中...")
-
         for p in processes:
             p.join()
 
     except KeyboardInterrupt:
-        print("\n\n正在停止所有 Profile...")
+        print("\n停止中...")
         for event in stop_events:
             event.set()
         for p in processes:
             p.terminate()
             p.join(timeout=2)
-        print("已停止所有 Profile")
 
     input("\n按 Enter 返回...")
 
 
 # ============ 狀態管理 ============
 
-def list_states(profile_name):
-    """列出所有狀態"""
-    clear_screen()
-    states = core.get_merged_states(profile_name)
-
-    print(f"=== {profile_name} 的狀態 ===\n")
-
-    if not states:
-        print("(無任何狀態)")
-    else:
-        for name, config in states.items():
-            source = config.get("_source", "unknown")
-            enabled = config.get("enabled", True)
-            status = "" if enabled else " [停用]"
-            regions = get_regions_display(config)
-            click = config.get("click", [])
-
-            print(f"  {name}{status}")
-            print(f"    來源: {source} | 點擊: {click} | {regions}")
-
-    input("\n按 Enter 返回...")
-
-
 def add_state_menu(profile_name):
     """新增狀態"""
     clear_screen()
     print("=== 新增狀態 ===\n")
 
-    # 選擇目標
-    print("新增到哪裡？")
-    print("  [s] shared（所有 Profile 共用）")
-    print("  [l] 本地（只有此 Profile）")
-    print("  [b] 取消")
-    print()
-
-    target = input("選擇: ").strip().lower()
-    if target not in ['s', 'l']:
-        return
-
-    save_to_shared = (target == 's')
-
-    # 取得設定
-    settings = core.get_shared_settings()
-    scale = settings["scale"]
-
-    config = core.get_profile_config(profile_name)
-    window = config["window"]
-
-    # 輸入名稱
-    print()
-    name = input("狀態名稱 (或 q 取消): ").strip()
+    name = input("狀態名稱 (q 取消): ").strip()
     if not name or name.lower() == 'q':
         return
 
-    # 記錄點擊座標
-    print(f"\n請把滑鼠移到「{name}」要點擊的位置，然後按 Enter...")
-    input()
-    click_x, click_y = pyautogui.position()
-    print(f"點擊座標: ({click_x}, {click_y})")
+    # 檢查是否已存在
+    states = core.get_states(profile_name)
+    if name in states:
+        print(f"狀態「{name}」已存在")
+        input("\n按 Enter 返回...")
+        return
 
-    # 詢問是否使用特徵區域
-    use_region = input("\n是否指定特徵區域？(y/n，預設 n): ").strip().lower() == 'y'
+    record_state(profile_name, name)
 
+
+def record_state(profile_name, state_name):
+    """錄製狀態（新增/編輯共用）- 純 ADB 模式"""
+    clear_screen()
+    print(f"=== 錄製: {state_name} ===\n")
+
+    # 連接 ADB
+    if not core.adb_connect():
+        print("錯誤: 無法連接 ADB")
+        input("\n按 Enter 返回...")
+        return
+
+    android_w, android_h = core.adb_get_resolution()
+    if not android_w or not android_h:
+        print("錯誤: 無法取得解析度")
+        input("\n按 Enter 返回...")
+        return
+
+    if android_h < android_w:
+        android_w, android_h = android_h, android_w
+
+    # 驗證解析度
+    settings = core.get_shared_settings()
+    expected = settings.get("resolution", [1080, 1920])
+    if [android_w, android_h] != expected:
+        print(f"警告: 解析度不符 (設定: {expected[0]}x{expected[1]}, 實際: {android_w}x{android_h})")
+        if input("繼續？(y/n): ").strip().lower() != 'y':
+            return
+
+    print(f"Android 解析度: {android_w}x{android_h}\n")
+
+    # 先截圖一次，後續都用這張圖
+    print("截圖中...")
+    screenshot = core.adb_screenshot()
+    if screenshot is None:
+        print("截圖失敗!")
+        input("\n按 Enter 返回...")
+        return
+    print("截圖完成\n")
+
+    # 步驟 1: 選擇點擊位置 (在截圖上選)
+    print("【步驟 1】選擇點擊位置")
+    print("在截圖視窗上點擊選擇位置，按 Enter 確認\n")
+
+    click_pos = core.adb_select_point(screenshot, title=f"{state_name} - 點擊位置")
+    if not click_pos:
+        print("已取消")
+        core.cv2.destroyAllWindows()
+        for _ in range(5):
+            core.cv2.waitKey(1)
+        input("\n按 Enter 返回...")
+        return
+
+    click_x, click_y = click_pos
+    print(f"點擊座標: ({click_x}, {click_y})\n")
+
+    # 步驟 2: 選擇特徵區域 (用同一張截圖)
     regions = []
-    if use_region:
-        print("\n可以指定多個區域，輸入 d 完成")
-        region_count = 1
-
+    print("【步驟 2】特徵區域（可選）")
+    if input("指定特徵區域？(y/n，預設 n): ").strip().lower() == 'y':
+        print("拖曳框選區域，按 Enter 確認，ESC 結束\n")
         while True:
-            print(f"\n--- 區域 {region_count} ---")
-            print("請把滑鼠移到區域的【左上角】，然後按 Enter (或輸入 d 完成)...")
-            cmd = input().strip().lower()
-            if cmd == 'd':
+            region = core.adb_select_region(screenshot, title=f"{state_name} - 區域 {len(regions)+1}")
+            if not region:
+                break
+            regions.append(list(region))
+            print(f"  已加入區域 {len(regions)}: {region}")
+            if input("繼續加入？(y/n): ").strip().lower() != 'y':
                 break
 
-            r_x1, r_y1 = pyautogui.position()
-            print(f"左上角: ({r_x1}, {r_y1})")
+    # 步驟 3: 儲存截圖
+    print("\n【步驟 3】儲存模板")
+    template_path = core.get_template_path(state_name, profile_name)
+    template_path.parent.mkdir(parents=True, exist_ok=True)
+    core.cv2.imwrite(str(template_path), screenshot)
+    print(f"已儲存: {template_path}")
 
-            print("請把滑鼠移到區域的【右下角】，然後按 Enter...")
-            input()
-            r_x2, r_y2 = pyautogui.position()
-            print(f"右下角: ({r_x2}, {r_y2})")
+    # 儲存
+    core.add_state(profile_name, state_name, [click_x, click_y], regions or None)
+    print(f"\n已儲存: {state_name}")
+    print(f"  點擊: ({click_x}, {click_y})")
+    if regions:
+        print(f"  區域: {regions}")
 
-            region = [min(r_x1, r_x2), min(r_y1, r_y2), max(r_x1, r_x2), max(r_y1, r_y2)]
-            regions.append(region)
-            print(f"已記錄區域 {region_count}: {region}")
-            region_count += 1
-
-    # 截圖
-    print("\n截圖中...")
-    output_path = core.capture_and_save_template(
-        name, window, scale,
-        save_to_shared=save_to_shared,
-        profile_name=profile_name
-    )
-    print(f"畫面已儲存: {output_path}")
-
-    # 儲存設定
-    if save_to_shared:
-        core.add_state_to_shared(name, [click_x, click_y], regions or None)
-        print(f"\n已新增到 shared: {name}")
-    else:
-        core.add_state_to_profile(profile_name, name, [click_x, click_y], regions or None)
-        print(f"\n已新增到 {profile_name}: {name}")
+    # 確保關閉所有 OpenCV 視窗
+    core.cv2.destroyAllWindows()
+    for _ in range(5):
+        core.cv2.waitKey(1)
 
     input("\n按 Enter 返回...")
 
 
-def remove_state_menu(profile_name):
-    """刪除狀態"""
+def copy_state_menu(profile_name):
+    """從其他 Profile 複製狀態"""
     clear_screen()
-    states = core.get_merged_states(profile_name)
+    print("=== 複製狀態 ===\n")
 
-    print("=== 刪除狀態 ===\n")
-
-    if not states:
-        print("(無任何狀態)")
+    profiles = [p for p in core.get_profile_list() if p != profile_name]
+    if not profiles:
+        print("沒有其他 Profile")
         input("\n按 Enter 返回...")
         return
 
-    state_list = list(states.keys())
-    for i, name in enumerate(state_list, 1):
-        source = states[name].get("_source", "unknown")
-        print(f"  [{i}] {name} ({source})")
+    # 選擇來源 Profile
+    print("來源 Profile:")
+    for i, name in enumerate(profiles, 1):
+        states = core.get_states(name)
+        print(f"  [{i}] {name} ({len(states)} 狀態)")
 
     print()
-    print("  [b] 取消")
-    print()
-
-    choice = input("選擇要刪除的狀態: ").strip().lower()
-    if choice == 'b':
+    choice = input("選擇: ").strip()
+    try:
+        idx = int(choice) - 1
+        if idx < 0 or idx >= len(profiles):
+            return
+    except ValueError:
         return
 
+    from_profile = profiles[idx]
+    from_states = core.get_states(from_profile)
+
+    if not from_states:
+        print("該 Profile 沒有狀態")
+        input("\n按 Enter 返回...")
+        return
+
+    # 選擇狀態
+    clear_screen()
+    print(f"=== 從 {from_profile} 複製 ===\n")
+
+    state_list = list(from_states.keys())
+    for i, name in enumerate(state_list, 1):
+        click = from_states[name].get("click", [])
+        print(f"  [{i}] {name} - {click}")
+
+    print()
+    print("  [a] 全部複製")
+    print()
+
+    choice = input("選擇: ").strip().lower()
+
+    if choice == 'a':
+        # 複製全部
+        copied = 0
+        for state_name in state_list:
+            success, msg = core.copy_state(from_profile, profile_name, state_name)
+            if success:
+                copied += 1
+                print(f"  複製: {state_name}")
+            else:
+                print(f"  跳過: {state_name} ({msg})")
+        print(f"\n已複製 {copied} 個狀態")
+    else:
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(state_list):
+                state_name = state_list[idx]
+                success, msg = core.copy_state(from_profile, profile_name, state_name)
+                print(f"\n{msg}")
+        except ValueError:
+            pass
+
+    input("\n按 Enter 返回...")
+
+
+def edit_state_menu(profile_name):
+    """編輯狀態（重新錄製）"""
+    states = core.get_states(profile_name)
+    if not states:
+        print("無狀態")
+        input("\n按 Enter 返回...")
+        return
+
+    clear_screen()
+    print("=== 編輯狀態 ===\n")
+
+    state_list = list(states.keys())
+    for i, name in enumerate(state_list, 1):
+        click = states[name].get("click", [])
+        regions = core.get_regions(states[name])
+        print(f"  [{i}] {name}: {click}, {len(regions) if regions else 0} 區域")
+
+    print()
+    choice = input("選擇: ").strip()
     try:
         idx = int(choice) - 1
         if idx < 0 or idx >= len(state_list):
-            print("無效選擇")
-            input("\n按 Enter 返回...")
+            return
+    except ValueError:
+        return
+
+    state_name = state_list[idx]
+
+    # 重新錄製（流程跟新增一樣）
+    record_state(profile_name, state_name)
+
+
+def remove_state_menu(profile_name):
+    """刪除狀態"""
+    states = core.get_states(profile_name)
+    if not states:
+        print("無狀態")
+        input("\n按 Enter 返回...")
+        return
+
+    clear_screen()
+    print("=== 刪除狀態 ===\n")
+
+    state_list = list(states.keys())
+    for i, name in enumerate(state_list, 1):
+        print(f"  [{i}] {name}")
+
+    print()
+    choice = input("選擇: ").strip()
+    try:
+        idx = int(choice) - 1
+        if idx < 0 or idx >= len(state_list):
             return
     except ValueError:
         return
 
     name = state_list[idx]
-    source = states[name].get("_source", "unknown")
+    if input(f"刪除「{name}」？(y/n): ").strip().lower() == 'y':
+        success, msg = core.remove_state(profile_name, name)
+        print(msg)
 
-    confirm = input(f"\n確定要刪除「{name}」({source})？(y/n): ").strip().lower()
-    if confirm != 'y':
-        print("已取消")
-        input("\n按 Enter 返回...")
-        return
-
-    if source == "shared":
-        success, msg = core.remove_state_from_shared(name)
-    else:
-        success, msg = core.remove_state_from_profile(profile_name, name)
-
-    print(f"\n{msg}")
     input("\n按 Enter 返回...")
 
 
 def toggle_state_menu(profile_name):
-    """切換狀態啟用"""
-    clear_screen()
-    states = core.get_merged_states(profile_name)
-
-    print("=== 切換狀態啟用 ===\n")
-
+    """切換啟用"""
+    states = core.get_states(profile_name)
     if not states:
-        print("(無任何狀態)")
+        print("無狀態")
         input("\n按 Enter 返回...")
         return
+
+    clear_screen()
+    print("=== 切換啟用 ===\n")
 
     state_list = list(states.keys())
     for i, name in enumerate(state_list, 1):
         enabled = states[name].get("enabled", True)
         status = "啟用" if enabled else "停用"
-        source = states[name].get("_source", "unknown")
-        print(f"  [{i}] {name} - {status} ({source})")
+        print(f"  [{i}] {name} - {status}")
 
     print()
-    print("  [b] 返回")
-    print()
-
-    choice = input("選擇要切換的狀態: ").strip().lower()
-    if choice == 'b':
-        return
-
+    choice = input("選擇: ").strip()
     try:
         idx = int(choice) - 1
         if idx < 0 or idx >= len(state_list):
-            print("無效選擇")
-            input("\n按 Enter 返回...")
             return
     except ValueError:
         return
 
     name = state_list[idx]
-    current_enabled = states[name].get("enabled", True)
-    new_enabled = not current_enabled
+    current = states[name].get("enabled", True)
+    core.toggle_state(profile_name, name, not current)
+    print(f"已{'停用' if current else '啟用'}: {name}")
+    input("\n按 Enter 返回...")
 
-    core.toggle_state_in_profile(profile_name, name, new_enabled)
 
-    status = "啟用" if new_enabled else "停用"
-    print(f"\n已將「{name}」設為 {status}")
+def test_state_menu(profile_name):
+    """測試比對"""
+    states = core.get_states(profile_name)
+    if not states:
+        print("無狀態")
+        input("\n按 Enter 返回...")
+        return
+
+    clear_screen()
+    print("=== 測試比對 ===\n")
+
+    if not core.adb_connect():
+        print("無法連接 ADB")
+        input("\n按 Enter 返回...")
+        return
+
+    settings = core.get_shared_settings()
+    threshold = settings["match_threshold"]
+
+    print("截圖中...")
+    frame = core.adb_screenshot()
+    if frame is None:
+        print("截圖失敗")
+        input("\n按 Enter 返回...")
+        return
+
+    print(f"尺寸: {frame.shape[1]}x{frame.shape[0]}\n")
+
+    for state_name, config in states.items():
+        path = core.get_template_path(state_name, profile_name)
+        if not path.exists():
+            print(f"  {state_name}: 缺少模板")
+            continue
+
+        template = core.cv2.imread(str(path))
+        if template is None:
+            print(f"  {state_name}: 無法讀取")
+            continue
+
+        regions = core.get_regions(config)
+
+        if regions:
+            scores = []
+            for region in regions:
+                fr = core.crop_region(frame, region)
+                tr = core.crop_region(template, region)
+                if fr is not None and tr is not None:
+                    scores.append(core.match_region(fr, tr))
+                else:
+                    scores.append(0)
+            score = min(scores) if scores else 0
+            detail = ", ".join([f"{s:.2f}" for s in scores])
+            mark = "V" if score >= threshold else " "
+            print(f"  {mark} {state_name}: {score:.4f} ({detail})")
+        else:
+            score = core.match_region(frame, template)
+            mark = "V" if score >= threshold else " "
+            print(f"  {mark} {state_name}: {score:.4f}")
+
+    print(f"\n閾值: {threshold}")
     input("\n按 Enter 返回...")
 
 
 # ============ Profile 管理 ============
 
 def create_profile_menu():
-    """建立新 Profile"""
+    """建立 Profile"""
     clear_screen()
     print("=== 新增 Profile ===\n")
 
-    name = input("Profile 名稱 (或 q 取消): ").strip()
+    name = input("名稱 (q 取消): ").strip()
     if not name or name.lower() == 'q':
         return
 
-    # 嘗試自動偵測 BlueStacks 視窗
-    windows = core.get_bluestacks_windows()
-    reference_window = None
-
-    if windows:
-        print("\n偵測到 BlueStacks 視窗:")
-        for i, w in enumerate(windows, 1):
-            print(f"  [{i}] {w['title']} - ({w['left']}, {w['top']}) - ({w['right']}, {w['bottom']})")
-        print()
-        print("  [m] 手動設定")
-        print("  [b] 取消")
-        print()
-
-        choice = input("選擇視窗: ").strip().lower()
-
-        if choice == 'b':
-            return
-        elif choice == 'm':
-            window = set_window_manually()
-            if not window:
-                return
-        else:
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(windows):
-                    w = windows[idx]
-                    window = {"left": w["left"], "top": w["top"], "right": w["right"], "bottom": w["bottom"]}
-                    reference_window = window.copy()  # 自動偵測的位置作為參考
-                else:
-                    print("無效選擇")
-                    input("\n按 Enter 返回...")
-                    return
-            except ValueError:
-                return
-    else:
-        print("\n未偵測到 BlueStacks 視窗")
-        confirm = input("要手動設定嗎？(y/n): ").strip().lower()
-        if confirm != 'y':
-            return
-        window = set_window_manually()
-        if not window:
-            return
-
-    success, msg = core.create_profile(name, window, reference_window)
-    print(f"\n{msg}")
-
+    success, msg = core.create_profile(name)
+    print(msg)
     input("\n按 Enter 返回...")
 
 
 def delete_profile_confirm(profile_name):
-    """確認刪除 Profile"""
-    print(f"\n確定要刪除 Profile「{profile_name}」？")
-    print("這將刪除所有本地狀態和模板")
-    confirm = input("輸入 'yes' 確認: ").strip().lower()
-
-    if confirm == 'yes':
+    """刪除 Profile"""
+    if input(f"刪除 Profile「{profile_name}」？輸入 yes: ").strip().lower() == 'yes':
         success, msg = core.delete_profile(profile_name)
-        print(f"\n{msg}")
+        print(msg)
         input("\n按 Enter 返回...")
         return True
-    else:
-        print("已取消")
-        return False
+    return False
 
 
-def set_window_position(profile_name):
-    """設定視窗位置"""
+def show_settings():
+    """顯示設定"""
     clear_screen()
-    print(f"=== 設定視窗位置: {profile_name} ===\n")
-
-    config = core.get_profile_config(profile_name)
-    current = config.get("window", {})
-    reference = config.get("reference_window", current)
-    print(f"目前截圖區域: ({current.get('left')}, {current.get('top')}) - ({current.get('right')}, {current.get('bottom')})")
-    print(f"參考位置:     ({reference.get('left')}, {reference.get('top')}) - ({reference.get('right')}, {reference.get('bottom')})")
-    print()
-
-    # 嘗試自動偵測
-    windows = core.get_bluestacks_windows()
-    detected_window = None
-
-    if windows:
-        print("偵測到 BlueStacks 視窗:")
-        for i, w in enumerate(windows, 1):
-            print(f"  [{i}] {w['title']} - ({w['left']}, {w['top']}) - ({w['right']}, {w['bottom']})")
-        print()
-        print("  [m] 手動設定")
-        print("  [b] 取消")
-        print()
-
-        choice = input("選擇: ").strip().lower()
-
-        if choice == 'b':
-            return
-        elif choice == 'm':
-            window = set_window_manually()
-            if not window:
-                return
-        else:
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(windows):
-                    w = windows[idx]
-                    window = {"left": w["left"], "top": w["top"], "right": w["right"], "bottom": w["bottom"]}
-                    detected_window = window.copy()
-                else:
-                    print("無效選擇")
-                    input("\n按 Enter 返回...")
-                    return
-            except ValueError:
-                return
-    else:
-        print("未偵測到 BlueStacks 視窗，請確認 BlueStacks 已開啟")
-        print()
-        confirm = input("要手動設定嗎？(y/n): ").strip().lower()
-        if confirm != 'y':
-            return
-        window = set_window_manually()
-        if not window:
-            return
-
-    config["window"] = window
-    print(f"\n截圖區域已更新: ({window['left']}, {window['top']}) - ({window['right']}, {window['bottom']})")
-
-    # 詢問是否也更新參考位置
-    if detected_window:
-        print()
-        update_ref = input("是否也更新參考位置？(錄製新狀態時使用) (y/n): ").strip().lower()
-        if update_ref == 'y':
-            config["reference_window"] = detected_window
-            print(f"參考位置已更新: ({detected_window['left']}, {detected_window['top']}) - ({detected_window['right']}, {detected_window['bottom']})")
-
-    core.save_profile_config(profile_name, config)
-
-    input("\n按 Enter 返回...")
-
-
-def set_window_manually():
-    """手動設定視窗位置"""
-    print("\n請把滑鼠移到視窗【左上角】，然後按 Enter...")
-    input()
-    left, top = pyautogui.position()
-    print(f"左上角: ({left}, {top})")
-
-    print("請把滑鼠移到視窗【右下角】，然後按 Enter...")
-    input()
-    right, bottom = pyautogui.position()
-    print(f"右下角: ({right}, {bottom})")
-
-    return {
-        "left": min(left, right),
-        "top": min(top, bottom),
-        "right": max(left, right),
-        "bottom": max(top, bottom)
-    }
-
-
-def edit_shared_settings():
-    """編輯共用設定"""
-    clear_screen()
-    print("=== 共用設定 ===\n")
+    print("=== 設定 ===\n")
 
     settings = core.get_shared_settings()
+    res = settings.get('resolution', [1080, 1920])
 
-    print(f"  scale: {settings.get('scale')}")
+    print(f"  resolution: {res[0]}x{res[1]}")
     print(f"  match_threshold: {settings.get('match_threshold')}")
     print(f"  loop_interval: {settings.get('loop_interval')}")
-    print(f"  start_delay: {settings.get('start_delay')}")
+    print(f"  long_interval: {settings.get('long_interval')}")
     print(f"  click_delay: {settings.get('click_delay')}")
     print(f"  debug: {settings.get('debug')}")
     print()
-    print("(編輯 shared/settings.json 來修改設定)")
+    print("編輯: shared/settings.json")
 
     input("\n按 Enter 返回...")
 

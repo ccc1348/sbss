@@ -1,8 +1,8 @@
 """
-核心模組：設定管理、狀態合併、自動化邏輯
+核心模組：設定管理、狀態管理、自動化邏輯
+純 ADB 模式 - 跨平台支援
 """
 
-import pyautogui
 import cv2
 import numpy as np
 import time
@@ -10,11 +10,8 @@ import random
 import json
 import os
 import shutil
-import ctypes
 import subprocess
 from pathlib import Path
-from PIL import Image
-import Quartz
 
 BASE_DIR = Path(__file__).parent
 SHARED_DIR = BASE_DIR / "shared"
@@ -38,11 +35,6 @@ def save_json(path, data):
 def get_shared_settings():
     """載入共用設定"""
     return load_json(SHARED_DIR / "settings.json")
-
-
-def get_shared_states():
-    """載入共用狀態"""
-    return load_json(SHARED_DIR / "states.json")
 
 
 def get_profile_list():
@@ -72,52 +64,20 @@ def save_profile_config(profile_name, config):
     save_json(config_path, config)
 
 
-def get_merged_states(profile_name):
-    """
-    合併狀態：shared + override + local
-    返回: dict of states
-    """
-    shared_states = get_shared_states()
-    profile_config = get_profile_config(profile_name)
-
-    override_states = profile_config.get("override_states", {})
-    local_states = profile_config.get("local_states", {})
-
-    # 從 shared 開始
-    merged = {}
-    for name, config in shared_states.items():
-        merged[name] = {**config, "_source": "shared"}
-
-    # 套用 override
-    for name, override in override_states.items():
-        if name in merged:
-            merged[name] = {**merged[name], **override, "_source": "shared"}
-
-    # 加入 local
-    for name, config in local_states.items():
-        merged[name] = {**config, "_source": "local"}
-
-    return merged
+def get_states(profile_name):
+    """取得 Profile 的所有狀態"""
+    config = get_profile_config(profile_name)
+    return config.get("states", {})
 
 
 def get_template_path(state_name, profile_name):
-    """
-    取得模板路徑（先找 local，再找 shared）
-    """
-    local_path = get_profile_dir(profile_name) / "templates" / f"{state_name}.png"
-    if local_path.exists():
-        return local_path
-
-    shared_path = SHARED_DIR / "templates" / f"{state_name}.png"
-    if shared_path.exists():
-        return shared_path
-
-    return None
+    """取得模板路徑"""
+    return get_profile_dir(profile_name) / "templates" / f"{state_name}.png"
 
 
 # ============ Profile 管理 ============
 
-def create_profile(profile_name, window=None, reference_window=None):
+def create_profile(profile_name):
     """建立新 Profile"""
     profile_dir = get_profile_dir(profile_name)
     if profile_dir.exists():
@@ -126,13 +86,7 @@ def create_profile(profile_name, window=None, reference_window=None):
     profile_dir.mkdir(parents=True)
     (profile_dir / "templates").mkdir()
 
-    default_window = {"left": 0, "top": 0, "right": 400, "bottom": 800}
-    config = {
-        "window": window or default_window,
-        "reference_window": reference_window or window or default_window,
-        "override_states": {},
-        "local_states": {}
-    }
+    config = {"states": {}}
     save_profile_config(profile_name, config)
     return True, "建立成功"
 
@@ -147,245 +101,334 @@ def delete_profile(profile_name):
     return True, "刪除成功"
 
 
-# ============ 視窗偵測 ============
-
-def get_bluestacks_windows():
-    """取得所有 BlueStacks 視窗位置（包含 window ID）"""
-    windows = []
-    window_list = Quartz.CGWindowListCopyWindowInfo(
-        Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
-        Quartz.kCGNullWindowID
-    )
-
-    for win in window_list:
-        owner = win.get(Quartz.kCGWindowOwnerName, "")
-        if owner == "BlueStacks":
-            bounds = win.get("kCGWindowBounds", {})
-            if bounds:
-                windows.append({
-                    "window_id": win.get(Quartz.kCGWindowNumber),
-                    "title": win.get(Quartz.kCGWindowName, "BlueStacks"),
-                    "left": int(bounds["X"]),
-                    "top": int(bounds["Y"]),
-                    "right": int(bounds["X"] + bounds["Width"]),
-                    "bottom": int(bounds["Y"] + bounds["Height"])
-                })
-
-    return windows
-
-
-def get_single_bluestacks_window():
-    """取得單一 BlueStacks 視窗（如果只有一個，包含 window_id）"""
-    windows = get_bluestacks_windows()
-    if len(windows) == 1:
-        w = windows[0]
-        return {
-            "window_id": w["window_id"],
-            "left": w["left"],
-            "top": w["top"],
-            "right": w["right"],
-            "bottom": w["bottom"]
-        }
-    return None
-
-
 # ============ 狀態管理 ============
 
-def add_state_to_shared(name, click, regions=None):
-    """新增狀態到 shared"""
-    states = get_shared_states()
-
-    state_config = {"click": click}
-    if regions:
-        if len(regions) == 1:
-            state_config["region"] = regions[0]
-        else:
-            state_config["regions"] = regions
-
-    states[name] = state_config
-    save_json(SHARED_DIR / "states.json", states)
-
-
-def add_state_to_profile(profile_name, name, click, regions=None):
-    """新增狀態到 Profile（local）"""
+def add_state(profile_name, name, click, regions=None):
+    """新增狀態"""
     config = get_profile_config(profile_name)
+    if "states" not in config:
+        config["states"] = {}
 
-    state_config = {"click": click}
+    state_config = {"click": click, "enabled": True}
     if regions:
         if len(regions) == 1:
             state_config["region"] = regions[0]
         else:
             state_config["regions"] = regions
 
-    config["local_states"][name] = state_config
+    config["states"][name] = state_config
     save_profile_config(profile_name, config)
 
 
-def remove_state_from_shared(name):
-    """從 shared 移除狀態"""
-    states = get_shared_states()
-    if name not in states:
+def remove_state(profile_name, name):
+    """刪除狀態"""
+    config = get_profile_config(profile_name)
+    if name not in config.get("states", {}):
         return False, "狀態不存在"
 
-    del states[name]
-    save_json(SHARED_DIR / "states.json", states)
+    del config["states"][name]
+    save_profile_config(profile_name, config)
 
     # 刪除模板
-    template_path = SHARED_DIR / "templates" / f"{name}.png"
+    template_path = get_template_path(name, profile_name)
     if template_path.exists():
         os.remove(template_path)
 
     return True, "刪除成功"
 
 
-def remove_state_from_profile(profile_name, name):
-    """從 Profile 移除狀態（local 或 override）"""
+def toggle_state(profile_name, state_name, enabled):
+    """啟用/停用狀態"""
     config = get_profile_config(profile_name)
-    removed = False
-
-    if name in config.get("local_states", {}):
-        del config["local_states"][name]
-        removed = True
-
-        # 刪除本地模板
-        template_path = get_profile_dir(profile_name) / "templates" / f"{name}.png"
-        if template_path.exists():
-            os.remove(template_path)
-
-    if name in config.get("override_states", {}):
-        del config["override_states"][name]
-        removed = True
-
-    if removed:
+    if state_name in config.get("states", {}):
+        config["states"][state_name]["enabled"] = enabled
         save_profile_config(profile_name, config)
-        return True, "刪除成功"
-
-    return False, "狀態不存在於此 Profile"
 
 
-def toggle_state_in_profile(profile_name, state_name, enabled):
-    """在 Profile 中啟用/停用 shared 狀態"""
-    config = get_profile_config(profile_name)
+def copy_state(from_profile, to_profile, state_name, new_name=None):
+    """從其他 Profile 複製狀態"""
+    if new_name is None:
+        new_name = state_name
 
-    if "override_states" not in config:
-        config["override_states"] = {}
+    # 複製設定
+    from_config = get_profile_config(from_profile)
+    if state_name not in from_config.get("states", {}):
+        return False, "來源狀態不存在"
 
-    if state_name not in config["override_states"]:
-        config["override_states"][state_name] = {}
+    to_config = get_profile_config(to_profile)
+    if "states" not in to_config:
+        to_config["states"] = {}
 
-    config["override_states"][state_name]["enabled"] = enabled
-    save_profile_config(profile_name, config)
+    # 檢查目標是否已存在
+    if new_name in to_config["states"]:
+        return False, f"目標已存在狀態「{new_name}」"
+
+    # 複製狀態設定
+    to_config["states"][new_name] = from_config["states"][state_name].copy()
+    save_profile_config(to_profile, to_config)
+
+    # 複製模板
+    from_template = get_template_path(state_name, from_profile)
+    to_template = get_template_path(new_name, to_profile)
+
+    if from_template.exists():
+        shutil.copy(from_template, to_template)
+
+    return True, f"已複製「{state_name}」到「{new_name}」"
 
 
-# ============ 截圖與模板 ============
+# ============ ADB 功能 ============
 
-def capture_window(window, scale):
-    """截取視窗區域（舊方法，截整個螢幕再裁切）"""
-    screenshot = pyautogui.screenshot()
-    screenshot_np = np.array(screenshot)
-
-    left = window["left"] * scale
-    top = window["top"] * scale
-    right = window["right"] * scale
-    bottom = window["bottom"] * scale
-
-    cropped = screenshot_np[top:bottom, left:right]
-    return cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR)
-
-
-def capture_window_by_id(window_id, window, scale):
-    """
-    使用 Quartz 直接截取特定視窗（即使被遮蓋也能截圖）
-
-    Args:
-        window_id: Quartz window ID
-        window: 視窗邊界 dict (left, top, right, bottom)
-        scale: Retina 縮放比例
-
-    Returns:
-        numpy array (BGR format for OpenCV)
-    """
-    # 計算截圖區域（相對於螢幕）
-    region = Quartz.CGRectMake(
-        window["left"],
-        window["top"],
-        window["right"] - window["left"],
-        window["bottom"] - window["top"]
+def adb_connect(host="localhost", port=5555):
+    """連接 ADB"""
+    addr = f"{host}:{port}"
+    result = subprocess.run(
+        ["adb", "connect", addr],
+        capture_output=True, text=True
     )
+    return "connected" in result.stdout.lower()
 
-    # 截取特定視窗的圖像
-    # kCGWindowListOptionIncludingWindow: 只截取指定視窗
-    # kCGWindowImageBoundsIgnoreFraming: 忽略視窗邊框，只截取內容
-    image = Quartz.CGWindowListCreateImage(
-        region,
-        Quartz.kCGWindowListOptionIncludingWindow,
-        window_id,
-        Quartz.kCGWindowImageBoundsIgnoreFraming
+
+def adb_get_resolution(device="localhost:5555"):
+    """取得 Android 解析度"""
+    result = subprocess.run(
+        ["adb", "-s", device, "shell", "wm", "size"],
+        capture_output=True, text=True
     )
+    if result.returncode == 0:
+        for line in result.stdout.strip().split("\n"):
+            if "Physical size" in line:
+                size_str = line.split(":")[-1].strip()
+                w, h = map(int, size_str.split("x"))
+                return w, h
+    return None, None
 
-    if image is None:
+
+def adb_tap(x, y, device="localhost:5555"):
+    """ADB 點擊指定座標"""
+    result = subprocess.run(
+        ["adb", "-s", device, "shell", "input", "tap", str(x), str(y)],
+        capture_output=True, text=True
+    )
+    return result.returncode == 0
+
+
+def adb_screenshot(device="localhost:5555"):
+    """使用 ADB 截取 Android 畫面"""
+    result = subprocess.run(
+        ["adb", "-s", device, "exec-out", "screencap", "-p"],
+        capture_output=True
+    )
+    if result.returncode != 0 or not result.stdout:
         return None
 
-    # 取得圖像尺寸
-    width = Quartz.CGImageGetWidth(image)
-    height = Quartz.CGImageGetHeight(image)
+    img_array = np.frombuffer(result.stdout, dtype=np.uint8)
+    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+    return img
 
-    if width == 0 or height == 0:
+
+def adb_save_template(name, profile_name, device="localhost:5555"):
+    """使用 ADB 截圖並儲存模板"""
+    img = adb_screenshot(device)
+    if img is None:
         return None
 
-    # 建立 bitmap context 來取得像素資料
-    bytes_per_row = width * 4
-    color_space = Quartz.CGColorSpaceCreateDeviceRGB()
-
-    # 分配記憶體
-    buffer = ctypes.create_string_buffer(height * bytes_per_row)
-
-    context = Quartz.CGBitmapContextCreate(
-        buffer,
-        width,
-        height,
-        8,  # bits per component
-        bytes_per_row,
-        color_space,
-        Quartz.kCGImageAlphaPremultipliedFirst | Quartz.kCGBitmapByteOrder32Little
-    )
-
-    # 繪製圖像到 context
-    Quartz.CGContextDrawImage(context, Quartz.CGRectMake(0, 0, width, height), image)
-
-    # 轉換為 numpy array
-    img_data = np.frombuffer(buffer, dtype=np.uint8)
-    img_data = img_data.reshape((height, width, 4))
-
-    # BGRA -> BGR (移除 alpha channel)
-    bgr = img_data[:, :, :3]
-
-    return bgr
-
-
-def capture_and_save_template(name, window, scale, save_to_shared=True, profile_name=None):
-    """截取並儲存模板"""
-    screenshot = pyautogui.screenshot()
-    screenshot_np = np.array(screenshot)
-
-    left = window["left"] * scale
-    top = window["top"] * scale
-    right = window["right"] * scale
-    bottom = window["bottom"] * scale
-
-    cropped = screenshot_np[top:bottom, left:right]
-
-    if save_to_shared:
-        output_path = SHARED_DIR / "templates" / f"{name}.png"
-    else:
-        output_path = get_profile_dir(profile_name) / "templates" / f"{name}.png"
-
+    output_path = get_template_path(name, profile_name)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(cropped).save(output_path)
+    cv2.imwrite(str(output_path), img)
     return output_path
 
 
-# ============ 自動化核心 ============
+def adb_capture_touch(device="localhost:5555", timeout=30):
+    """
+    捕獲 ADB 觸摸位置（跨平台）
+    返回 (x, y) Android 座標，或 None（如超時）
+    """
+    import re
+    import threading
+    import queue
+
+    # 取得解析度
+    width, height = adb_get_resolution(device)
+    if not width or not height:
+        return None
+
+    # 確保是直向
+    if height < width:
+        width, height = height, width
+
+    # BlueStacks Virtual Touch 最大值
+    TOUCH_MAX = 32767
+
+    # 啟動 getevent
+    proc = subprocess.Popen(
+        ["adb", "-s", device, "shell", "getevent", "-l", "/dev/input/event2"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    result_queue = queue.Queue()
+
+    def reader():
+        touch_x = None
+        touch_y = None
+        try:
+            for line in proc.stdout:
+                if "ABS_MT_POSITION_X" in line:
+                    match = re.search(r"ABS_MT_POSITION_X\s+([0-9a-fA-F]+)", line)
+                    if match:
+                        raw_x = int(match.group(1), 16)
+                        touch_x = int(raw_x / TOUCH_MAX * width)
+
+                elif "ABS_MT_POSITION_Y" in line:
+                    match = re.search(r"ABS_MT_POSITION_Y\s+([0-9a-fA-F]+)", line)
+                    if match:
+                        raw_y = int(match.group(1), 16)
+                        touch_y = int(raw_y / TOUCH_MAX * height)
+
+                if touch_x is not None and touch_y is not None:
+                    result_queue.put((touch_x, touch_y))
+                    return
+        except:
+            pass
+
+    thread = threading.Thread(target=reader, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout)
+
+    proc.terminate()
+    proc.wait()
+
+    try:
+        return result_queue.get_nowait()
+    except queue.Empty:
+        return None
+
+
+# ============ 圖片選擇 ============
+
+def adb_select_point(img, title="選擇點擊位置"):
+    """
+    在圖片上選擇一個點
+    img: 已截取的圖片
+    返回 (x, y) 或 None
+    """
+    if img is None:
+        return None
+
+    h, w = img.shape[:2]
+    # 縮放以適合螢幕 (最大 800 寬)
+    scale = min(800 / w, 1.0)
+    if scale < 1.0:
+        display_img = cv2.resize(img, (int(w * scale), int(h * scale)))
+    else:
+        display_img = img.copy()
+
+    selected = [None]
+
+    def on_mouse(event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            selected[0] = (x, y)
+
+    window = f"{title} (點擊選擇, Enter 確認, ESC 取消)"
+    cv2.namedWindow(window)
+    cv2.setMouseCallback(window, on_mouse)
+
+    while True:
+        show = display_img.copy()
+        if selected[0]:
+            # 畫十字標記
+            x, y = selected[0]
+            cv2.line(show, (x - 15, y), (x + 15, y), (0, 255, 0), 2)
+            cv2.line(show, (x, y - 15), (x, y + 15), (0, 255, 0), 2)
+            cv2.circle(show, (x, y), 5, (0, 255, 0), -1)
+            # 顯示座標
+            orig_x, orig_y = int(x / scale), int(y / scale)
+            cv2.putText(show, f"({orig_x}, {orig_y})", (x + 10, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+        cv2.imshow(window, show)
+        key = cv2.waitKey(30) & 0xFF
+
+        if key == 27:  # ESC
+            cv2.destroyAllWindows()
+            cv2.waitKey(1)
+            return None
+        elif key == 13 and selected[0]:  # Enter
+            cv2.destroyAllWindows()
+            cv2.waitKey(1)
+            x, y = selected[0]
+            return (int(x / scale), int(y / scale))
+
+
+def adb_select_region(img, title="選擇區域"):
+    """
+    在圖片上拖曳選擇區域
+    img: 已截取的圖片
+    返回 (left, top, right, bottom) 或 None
+    """
+    if img is None:
+        return None
+
+    h, w = img.shape[:2]
+    scale = min(800 / w, 1.0)
+    if scale < 1.0:
+        display_img = cv2.resize(img, (int(w * scale), int(h * scale)))
+    else:
+        display_img = img.copy()
+
+    state = {"start": None, "end": None, "dragging": False}
+
+    def on_mouse(event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            state["start"] = (x, y)
+            state["end"] = (x, y)
+            state["dragging"] = True
+        elif event == cv2.EVENT_MOUSEMOVE and state["dragging"]:
+            state["end"] = (x, y)
+        elif event == cv2.EVENT_LBUTTONUP:
+            state["end"] = (x, y)
+            state["dragging"] = False
+
+    window = f"{title} (拖曳選擇, Enter 確認, ESC 取消)"
+    cv2.namedWindow(window)
+    cv2.setMouseCallback(window, on_mouse)
+
+    while True:
+        show = display_img.copy()
+        if state["start"] and state["end"]:
+            x1, y1 = state["start"]
+            x2, y2 = state["end"]
+            cv2.rectangle(show, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            # 顯示區域尺寸
+            orig_region = [
+                int(min(x1, x2) / scale), int(min(y1, y2) / scale),
+                int(max(x1, x2) / scale), int(max(y1, y2) / scale)
+            ]
+            info = f"{orig_region[2]-orig_region[0]}x{orig_region[3]-orig_region[1]}"
+            cv2.putText(show, info, (min(x1, x2), min(y1, y2) - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        cv2.imshow(window, show)
+        key = cv2.waitKey(30) & 0xFF
+
+        if key == 27:  # ESC
+            cv2.destroyAllWindows()
+            cv2.waitKey(1)
+            return None
+        elif key == 13 and state["start"] and state["end"]:  # Enter
+            cv2.destroyAllWindows()
+            cv2.waitKey(1)
+            x1, y1 = state["start"]
+            x2, y2 = state["end"]
+            return (
+                int(min(x1, x2) / scale), int(min(y1, y2) / scale),
+                int(max(x1, x2) / scale), int(max(y1, y2) / scale)
+            )
+
+
+# ============ 模板比對 ============
 
 def get_regions(state_config):
     """取得狀態的所有區域"""
@@ -396,13 +439,9 @@ def get_regions(state_config):
     return []
 
 
-def crop_region(img, region, window, scale):
+def crop_region(img, region):
     """從圖片裁切指定區域"""
-    left = int((region[0] - window["left"]) * scale)
-    top = int((region[1] - window["top"]) * scale)
-    right = int((region[2] - window["left"]) * scale)
-    bottom = int((region[3] - window["top"]) * scale)
-
+    left, top, right, bottom = region
     left = max(0, left)
     top = max(0, top)
     right = min(img.shape[1], right)
@@ -412,51 +451,6 @@ def crop_region(img, region, window, scale):
         return None
 
     return img[top:bottom, left:right]
-
-
-def load_templates(profile_name, states, window, scale):
-    """載入所有狀態模板"""
-    templates = {}
-
-    for state_name, state_config in states.items():
-        if not state_config.get("enabled", True):
-            print(f"  跳過: {state_name} (disabled)")
-            continue
-
-        path = get_template_path(state_name, profile_name)
-        if not path:
-            print(f"  缺少: {state_name}.png")
-            continue
-
-        img = cv2.imread(str(path))
-        if img is None:
-            print(f"  警告: 無法讀取 {path}")
-            continue
-
-        regions = get_regions(state_config)
-
-        if regions:
-            region_templates = []
-            for i, region in enumerate(regions):
-                cropped = crop_region(img, region, window, scale)
-                if cropped is None:
-                    print(f"  警告: {state_name} region[{i}] 無效")
-                    continue
-                region_templates.append(cropped)
-
-            if not region_templates:
-                print(f"  警告: {state_name} 沒有有效區域，跳過")
-                continue
-
-            templates[state_name] = region_templates
-            source = state_config.get("_source", "unknown")
-            print(f"  載入: {state_name} ({len(region_templates)} 個區域) [{source}]")
-        else:
-            templates[state_name] = [img]
-            source = state_config.get("_source", "unknown")
-            print(f"  載入: {state_name} (全畫面) [{source}]")
-
-    return templates
 
 
 def match_region(frame_region, template_region):
@@ -471,12 +465,54 @@ def match_region(frame_region, template_region):
     return max_val
 
 
-def match_state(current_frame, templates, states, window, scale, threshold, offset=(0, 0)):
+def load_templates(profile_name, states):
+    """載入所有狀態模板"""
+    templates = {}
+
+    for state_name, state_config in states.items():
+        if not state_config.get("enabled", True):
+            print(f"  跳過: {state_name} (disabled)")
+            continue
+
+        path = get_template_path(state_name, profile_name)
+        if not path.exists():
+            print(f"  缺少: {state_name}.png")
+            continue
+
+        img = cv2.imread(str(path))
+        if img is None:
+            print(f"  警告: 無法讀取 {path}")
+            continue
+
+        regions = get_regions(state_config)
+
+        if regions:
+            region_templates = []
+            for i, region in enumerate(regions):
+                cropped = crop_region(img, region)
+                if cropped is None:
+                    print(f"  警告: {state_name} region[{i}] 無效")
+                    continue
+                region_templates.append(cropped)
+
+            if not region_templates:
+                print(f"  警告: {state_name} 沒有有效區域，跳過")
+                continue
+
+            templates[state_name] = region_templates
+            print(f"  載入: {state_name} ({len(region_templates)} 個區域)")
+        else:
+            templates[state_name] = [img]
+            print(f"  載入: {state_name} (全畫面)")
+
+    return templates
+
+
+def match_state(current_frame, templates, states, threshold):
     """比對當前畫面與所有模板"""
     best_match = None
     best_confidence = 0
     all_scores = {}
-    offset_x, offset_y = offset
 
     for state_name, template_list in templates.items():
         state_config = states[state_name]
@@ -489,14 +525,7 @@ def match_state(current_frame, templates, states, window, scale, threshold, offs
 
         if regions:
             for i, (region, template) in enumerate(zip(regions, template_list)):
-                # 套用偏移到 region
-                adjusted_region = [
-                    region[0] + offset_x,
-                    region[1] + offset_y,
-                    region[2] + offset_x,
-                    region[3] + offset_y
-                ]
-                frame_region = crop_region(current_frame, adjusted_region, window, scale)
+                frame_region = crop_region(current_frame, region)
                 if frame_region is None:
                     region_scores.append(0)
                     continue
@@ -516,143 +545,43 @@ def match_state(current_frame, templates, states, window, scale, threshold, offs
     return best_match, best_confidence, all_scores
 
 
-# ============ ADB 點擊 ============
-
-def adb_connect(host="localhost", port=5555):
-    """連接 ADB"""
-    addr = f"{host}:{port}"
-    result = subprocess.run(
-        ["adb", "connect", addr],
-        capture_output=True, text=True
-    )
-    return "connected" in result.stdout.lower()
-
-
-def adb_get_resolution(device="localhost:5555"):
-    """取得 Android 解析度"""
-    result = subprocess.run(
-        ["adb", "-s", device, "shell", "wm", "size"],
-        capture_output=True, text=True
-    )
-    # 輸出格式: "Physical size: 1920x1080" 或 "Physical size: 1080x1920"
-    if result.returncode == 0:
-        for line in result.stdout.strip().split("\n"):
-            if "Physical size" in line:
-                size_str = line.split(":")[-1].strip()
-                w, h = map(int, size_str.split("x"))
-                return w, h
-    return None, None
-
-
-def adb_tap(android_x, android_y, device="localhost:5555"):
-    """ADB 點擊指定 Android 座標"""
-    result = subprocess.run(
-        ["adb", "-s", device, "shell", "input", "tap", str(android_x), str(android_y)],
-        capture_output=True, text=True
-    )
-    return result.returncode == 0
-
-
-def convert_to_android_coords(click_x, click_y, config_window, android_resolution):
-    """
-    將 macOS 螢幕座標轉換為 Android 座標
-
-    Args:
-        click_x, click_y: macOS 螢幕座標（原始錄製的點擊位置）
-        config_window: 遊戲視窗區域 dict (left, top, right, bottom)
-        android_resolution: (android_width, android_height)
-
-    Returns:
-        (android_x, android_y)
-    """
-    android_w, android_h = android_resolution
-
-    # 計算相對於 config_window 的位置
-    rel_x = click_x - config_window["left"]
-    rel_y = click_y - config_window["top"]
-
-    # config_window 尺寸
-    win_w = config_window["right"] - config_window["left"]
-    win_h = config_window["bottom"] - config_window["top"]
-
-    # 轉換到 Android 座標
-    android_x = int(rel_x * android_w / win_w)
-    android_y = int(rel_y * android_h / win_h)
-
-    return android_x, android_y
-
-
-def click_at(x, y, delay_range):
-    """點擊指定座標（使用 pyautogui）"""
-    pyautogui.click(x, y)
-    delay = random.uniform(delay_range[0], delay_range[1])
-    time.sleep(delay)
-
-
-def click_at_adb(click_x, click_y, config_window, android_resolution, delay_range, device="localhost:5555"):
-    """點擊指定座標（使用 ADB）"""
-    android_x, android_y = convert_to_android_coords(click_x, click_y, config_window, android_resolution)
-    adb_tap(android_x, android_y, device)
-    delay = random.uniform(delay_range[0], delay_range[1])
-    time.sleep(delay)
-    return android_x, android_y
-
+# ============ 自動化核心 ============
 
 def run_automation(profile_name, stop_event=None):
-    """執行自動化（可在獨立進程中運行）"""
+    """執行自動化"""
     settings = get_shared_settings()
-    profile_config = get_profile_config(profile_name)
-    states = get_merged_states(profile_name)
+    states = get_states(profile_name)
 
-    # 載入視窗設定
-    config_window = profile_config["window"]
-    reference_window = profile_config.get("reference_window", config_window)
+    if not states:
+        print("錯誤: 此 Profile 沒有任何狀態")
+        return
 
-    # 嘗試自動偵測當前視窗位置
-    detected = get_single_bluestacks_window()
-    window_id = None
-    if detected:
-        current_window = detected
-        window_id = detected.get("window_id")
-        offset_x = current_window["left"] - reference_window["left"]
-        offset_y = current_window["top"] - reference_window["top"]
-        print(f"偵測到視窗位置: ({current_window['left']}, {current_window['top']})")
-        if window_id:
-            print(f"視窗 ID: {window_id} (支援背景截圖)")
-        if offset_x != 0 or offset_y != 0:
-            print(f"相對參考位置偏移: ({offset_x:+d}, {offset_y:+d})")
-    else:
-        current_window = config_window
-        offset_x = 0
-        offset_y = 0
-        print("未偵測到視窗，使用設定值（不支援背景截圖）")
+    # 連接 ADB
+    if not adb_connect():
+        print("錯誤: 無法連接 ADB")
+        print("請確認 BlueStacks 已開啟且 ADB 已啟用")
+        return
 
-    # 嘗試連接 ADB
-    use_adb = False
-    android_resolution = None
-    if adb_connect():
-        android_w, android_h = adb_get_resolution()
-        if android_w and android_h:
-            # 確保是直向（高度 > 寬度）
-            if android_h < android_w:
-                android_w, android_h = android_h, android_w
-            android_resolution = (android_w, android_h)
-            use_adb = True
-            print(f"ADB 已連接 (解析度: {android_w}x{android_h})，滑鼠不會被佔用")
-        else:
-            print("ADB 連接成功但無法取得解析度，使用 pyautogui")
-    else:
-        print("ADB 未連接，使用 pyautogui 點擊（滑鼠會被佔用）")
+    android_w, android_h = adb_get_resolution()
+    if not android_w or not android_h:
+        print("錯誤: 無法取得 Android 解析度")
+        return
 
-    # 計算截圖用的視窗區域（套用偏移到原本的 config_window）
-    window = {
-        "left": config_window["left"] + offset_x,
-        "top": config_window["top"] + offset_y,
-        "right": config_window["right"] + offset_x,
-        "bottom": config_window["bottom"] + offset_y
-    }
+    # 確保是直向
+    if android_h < android_w:
+        android_w, android_h = android_h, android_w
 
-    scale = settings["scale"]
+    # 驗證解析度
+    expected_res = settings.get("resolution", [1080, 1920])
+    if [android_w, android_h] != expected_res:
+        print(f"警告: 解析度不符！")
+        print(f"  設定: {expected_res[0]}x{expected_res[1]}")
+        print(f"  實際: {android_w}x{android_h}")
+        print("模板和座標可能不正確，請調整 BlueStacks 解析度或重新錄製")
+        return
+
+    print(f"ADB 已連接 (解析度: {android_w}x{android_h})")
+
     threshold = settings["match_threshold"]
     short_interval = settings["loop_interval"]
     long_interval = settings.get("long_interval", 10.0)
@@ -663,8 +592,8 @@ def run_automation(profile_name, stop_event=None):
 
     print(f"\n=== Profile: {profile_name} ===")
     print("載入狀態模板...")
-    # 模板是用原始 config_window 截的，所以用 config_window 載入
-    templates = load_templates(profile_name, states, config_window, scale)
+
+    templates = load_templates(profile_name, states)
 
     if not templates:
         print("錯誤: 沒有可用的模板")
@@ -686,18 +615,14 @@ def run_automation(profile_name, stop_event=None):
             if stop_event and stop_event.is_set():
                 break
 
-            # 優先使用視窗截圖（支援背景），否則用螢幕截圖
-            if window_id:
-                current_frame = capture_window_by_id(window_id, window, scale)
-                if current_frame is None:
-                    print("警告: 視窗截圖失敗，嘗試螢幕截圖")
-                    current_frame = capture_window(window, scale)
-            else:
-                current_frame = capture_window(window, scale)
+            current_frame = adb_screenshot()
+            if current_frame is None:
+                print("警告: ADB 截圖失敗")
+                time.sleep(short_interval)
+                continue
 
             state, confidence, all_scores = match_state(
-                current_frame, templates, states, window, scale, threshold,
-                offset=(offset_x, offset_y)
+                current_frame, templates, states, threshold
             )
 
             if debug:
@@ -706,14 +631,12 @@ def run_automation(profile_name, stop_event=None):
                 print(f"[DEBUG] [{interval_mode}] {scores_str}")
 
             if state:
-                orig_x, orig_y = states[state]["click"]
-                if use_adb:
-                    android_x, android_y = click_at_adb(orig_x, orig_y, config_window, android_resolution, click_delay)
-                    print(f">>> [{state}] {confidence:.2f} -> ADB 點擊 ({android_x}, {android_y})")
-                else:
-                    x, y = orig_x + offset_x, orig_y + offset_y
-                    print(f">>> [{state}] {confidence:.2f} -> 點擊 ({x}, {y})")
-                    click_at(x, y, click_delay)
+                click_x, click_y = states[state]["click"]
+                adb_tap(click_x, click_y)
+                delay = random.uniform(click_delay[0], click_delay[1])
+                time.sleep(delay)
+                print(f">>> [{state}] {confidence:.2f} -> 點擊 ({click_x}, {click_y})")
+
                 consecutive_misses = 0
                 if using_long_interval:
                     using_long_interval = False
