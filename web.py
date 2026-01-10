@@ -10,9 +10,45 @@ import time
 import queue
 import base64
 import cv2
+import os
 
 BASE_DIR = Path(__file__).parent
 app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
+
+# ============ 自動關閉管理 ============
+
+class ShutdownManager:
+    """管理自動關閉 - 使用心跳檢測"""
+    def __init__(self, timeout=5):
+        self.timeout = timeout
+        self.last_heartbeat = None
+        self.lock = threading.Lock()
+        self.checker_thread = None
+
+    def heartbeat(self):
+        with self.lock:
+            first_beat = self.last_heartbeat is None
+            self.last_heartbeat = time.time()
+
+        # 第一次心跳時啟動檢查線程
+        if first_beat:
+            self.checker_thread = threading.Thread(target=self._checker, daemon=True)
+            self.checker_thread.start()
+
+    def _checker(self):
+        """定期檢查心跳是否超時"""
+        while True:
+            time.sleep(1)
+            with self.lock:
+                if self.last_heartbeat is None:
+                    continue
+                elapsed = time.time() - self.last_heartbeat
+                if elapsed > self.timeout:
+                    print(f"\n心跳超時 ({elapsed:.1f}s)，自動關閉服務...")
+                    os._exit(0)
+
+
+shutdown_manager = ShutdownManager(timeout=5)
 
 # ============ 運行管理 ============
 
@@ -20,8 +56,9 @@ class Runner:
     """管理自動化運行"""
     def __init__(self):
         self.thread = None
-        self.status = "stopped"  # stopped, running, paused
+        self.status = "stopped"  # stopped, running
         self.profile_name = None
+        self.device = None
         self.logs = []
         self.max_logs = 100
         self.lock = threading.Lock()
@@ -41,11 +78,12 @@ class Runner:
         with self.lock:
             self.logs = []
 
-    def start(self, profile_name):
+    def start(self, profile_name, device=None):
         if self.status == "running":
             return False, "已在運行中"
 
         self.profile_name = profile_name
+        self.device = device or "localhost:5555"
         self.status = "running"
         self.clear_logs()
         self.thread = threading.Thread(target=self._run_loop, daemon=True)
@@ -61,12 +99,15 @@ class Runner:
 
     def _run_loop(self):
         """自動化主循環"""
-        self.log(f"開始運行: {self.profile_name}")
+        self.log(f"開始運行: {self.profile_name} ({self.device})")
 
-        if not core.adb_connect():
-            self.log("無法連接 ADB")
-            self.status = "stopped"
-            return
+        # 嘗試連接（如果是 localhost:port 格式）
+        if self.device.startswith("localhost:"):
+            port = int(self.device.split(":")[1])
+            if not core.adb_connect(port=port):
+                self.log(f"無法連接 ADB: {self.device}")
+                self.status = "stopped"
+                return
 
         settings = core.get_shared_settings()
         threshold = settings["match_threshold"]
@@ -79,7 +120,7 @@ class Runner:
 
         while self.status != "stopped":
             # 截圖
-            screenshot = core.adb_screenshot()
+            screenshot = core.adb_screenshot(device=self.device)
             if screenshot is None:
                 self.log("截圖失敗")
                 time.sleep(loop_interval)
@@ -121,7 +162,7 @@ class Runner:
                     click = config.get("click", [])
                     if click:
                         self.log(f"匹配: {state_name} ({min_score:.2f}) → 點擊 {click}")
-                        core.adb_tap(click[0], click[1])
+                        core.adb_tap(click[0], click[1], device=self.device)
 
                         # 點擊後等待
                         delay = click_delay[0] + (click_delay[1] - click_delay[0]) * (time.time() % 1)
@@ -368,10 +409,15 @@ def api_state_screenshot(name, state_name):
 @app.route("/api/screenshot")
 def api_screenshot():
     """取得當前截圖"""
-    if not core.adb_connect():
-        return jsonify({"error": "無法連接 ADB"}), 500
+    device = request.args.get("device", "localhost:5555")
 
-    img = core.adb_screenshot()
+    # 嘗試連接（如果是 localhost:port 格式）
+    if device.startswith("localhost:"):
+        port = int(device.split(":")[1])
+        if not core.adb_connect(port=port):
+            return jsonify({"error": f"無法連接 ADB: {device}"}), 500
+
+    img = core.adb_screenshot(device=device)
     if img is None:
         return jsonify({"error": "截圖失敗"}), 500
 
@@ -382,12 +428,23 @@ def api_screenshot():
     return jsonify({"image": b64, "width": img.shape[1], "height": img.shape[0]})
 
 
+# ============ 設備 API ============
+
+@app.route("/api/devices")
+def api_list_devices():
+    """列出所有已連接的 ADB 設備"""
+    devices = core.adb_list_devices()
+    return jsonify({"devices": devices})
+
+
 # ============ 運行控制 API ============
 
 @app.route("/api/runner/start/<profile_name>", methods=["POST"])
 def api_runner_start(profile_name):
     """啟動運行"""
-    success, msg = runner.start(profile_name)
+    data = request.json or {}
+    device = data.get("device")
+    success, msg = runner.start(profile_name, device=device)
     return jsonify({"success": success, "message": msg})
 
 
@@ -408,6 +465,13 @@ def api_runner_status():
         "logs": runner.get_logs(since),
         "log_count": len(runner.logs)
     })
+
+
+@app.route("/api/heartbeat", methods=["POST"])
+def api_heartbeat():
+    """心跳 - 用於追蹤頁面連線狀態"""
+    shutdown_manager.heartbeat()
+    return "", 204
 
 
 @app.route("/api/runner/stream")

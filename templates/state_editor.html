@@ -52,6 +52,17 @@
         }
         .btn-primary { background: #4a69bd; color: #fff; }
         .btn-primary:hover { background: #3c5aa6; }
+        .device-select {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            background: #0f1729;
+            color: #fff;
+            font-size: 14px;
+            min-width: 160px;
+            cursor: pointer;
+        }
+        .device-select:focus { outline: 2px solid #4a69bd; }
         .btn-secondary { background: #333; color: #fff; }
         .btn-secondary:hover { background: #444; }
         .btn-success { background: #2ecc71; color: #fff; }
@@ -189,6 +200,9 @@
             <div class="screenshot-area">
                 <div class="screenshot-header">
                     <h2>截圖</h2>
+                    <select id="deviceSelect" class="device-select">
+                        <option value="">載入設備中...</option>
+                    </select>
                     <button class="btn btn-secondary" onclick="takeScreenshot()">重新截圖</button>
                 </div>
 
@@ -268,6 +282,31 @@
         const profileName = "{{ profile }}";
         const isNew = {{ 'true' if is_new else 'false' }};
 
+        // ========== 設備管理 ==========
+        async function loadDevices() {
+            const select = document.getElementById('deviceSelect');
+            select.innerHTML = '<option value="">載入中...</option>';
+
+            try {
+                const res = await fetch('/api/devices');
+                const data = await res.json();
+                const devices = data.devices || [];
+
+                if (devices.length === 0) {
+                    select.innerHTML = '<option value="">無設備（請先開啟模擬器）</option>';
+                } else {
+                    select.innerHTML = devices.map(d =>
+                        `<option value="${d.id}">${d.name}</option>`
+                    ).join('');
+                }
+            } catch (e) {
+                select.innerHTML = '<option value="">載入失敗</option>';
+            }
+        }
+
+        // 頁面載入時取得設備列表
+        loadDevices();
+
         let canvas, ctx;
         let imageData = null;  // base64
         let imageWidth = 0;
@@ -301,7 +340,13 @@
         }
 
         async function takeScreenshot() {
-            const res = await fetch('/api/screenshot');
+            const device = document.getElementById('deviceSelect').value;
+            if (!device) {
+                alert('請先選擇設備');
+                return;
+            }
+
+            const res = await fetch(`/api/screenshot?device=${encodeURIComponent(device)}`);
             const data = await res.json();
 
             if (data.error) {
@@ -574,6 +619,9 @@
 
         loadExistingScreenshot();
         {% endif %}
+
+        // 心跳（用於自動關閉檢測）
+        setInterval(() => fetch('/api/heartbeat', { method: 'POST' }), 2000);
     </script>
 </body>
 </html>

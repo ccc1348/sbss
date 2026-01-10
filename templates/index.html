@@ -260,6 +260,9 @@
         document.getElementById('addModal').addEventListener('click', (e) => {
             if (e.target.classList.contains('modal')) hideAddModal();
         });
+
+        // 心跳（用於自動關閉檢測）
+        setInterval(() => fetch('/api/heartbeat', { method: 'POST' }), 2000);
     </script>
 </body>
 </html>

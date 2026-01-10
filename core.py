@@ -174,6 +174,58 @@ def move_state(profile_name, state_name, direction):
 
 # ============ ADB 功能 ============
 
+def adb_list_devices():
+    """
+    列出所有已連接的 ADB 設備
+    返回 [{"id": "localhost:5555", "name": "emulator-5554 (localhost:5555)"}, ...]
+    """
+    result = subprocess.run(
+        ["adb", "devices"],
+        capture_output=True, text=True
+    )
+
+    raw_devices = []
+    for line in result.stdout.strip().split("\n")[1:]:  # 跳過標題行
+        if "\t" in line:
+            device_id, status = line.split("\t")
+            if status == "device":
+                raw_devices.append(device_id)
+
+    # 整理設備列表
+    devices = []
+    seen_ports = set()
+
+    # 先處理 emulator-xxxx 格式
+    for dev in raw_devices:
+        if dev.startswith("emulator-"):
+            try:
+                emu_port = int(dev.split("-")[1])
+                adb_port = emu_port + 1  # emulator-5554 → localhost:5555
+                device_id = f"localhost:{adb_port}"
+                devices.append({
+                    "id": device_id,
+                    "name": f"{dev} (localhost:{adb_port})"
+                })
+                seen_ports.add(adb_port)
+            except (ValueError, IndexError):
+                pass
+
+    # 再處理 localhost:xxxx 格式（避免重複）
+    for dev in raw_devices:
+        if ":" in dev:
+            try:
+                port = int(dev.split(":")[1])
+                if port not in seen_ports:
+                    devices.append({
+                        "id": dev,
+                        "name": dev
+                    })
+            except (ValueError, IndexError):
+                devices.append({"id": dev, "name": dev})
+
+    return devices
+
+
 def adb_connect(host="localhost", port=5555):
     """連接 ADB"""
     addr = f"{host}:{port}"
