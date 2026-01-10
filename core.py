@@ -10,6 +10,7 @@ import random
 import json
 import os
 import shutil
+import ctypes
 from pathlib import Path
 from PIL import Image
 import Quartz
@@ -148,7 +149,7 @@ def delete_profile(profile_name):
 # ============ 視窗偵測 ============
 
 def get_bluestacks_windows():
-    """取得所有 BlueStacks 視窗位置"""
+    """取得所有 BlueStacks 視窗位置（包含 window ID）"""
     windows = []
     window_list = Quartz.CGWindowListCopyWindowInfo(
         Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
@@ -161,6 +162,7 @@ def get_bluestacks_windows():
             bounds = win.get("kCGWindowBounds", {})
             if bounds:
                 windows.append({
+                    "window_id": win.get(Quartz.kCGWindowNumber),
                     "title": win.get(Quartz.kCGWindowName, "BlueStacks"),
                     "left": int(bounds["X"]),
                     "top": int(bounds["Y"]),
@@ -172,11 +174,17 @@ def get_bluestacks_windows():
 
 
 def get_single_bluestacks_window():
-    """取得單一 BlueStacks 視窗（如果只有一個）"""
+    """取得單一 BlueStacks 視窗（如果只有一個，包含 window_id）"""
     windows = get_bluestacks_windows()
     if len(windows) == 1:
         w = windows[0]
-        return {"left": w["left"], "top": w["top"], "right": w["right"], "bottom": w["bottom"]}
+        return {
+            "window_id": w["window_id"],
+            "left": w["left"],
+            "top": w["top"],
+            "right": w["right"],
+            "bottom": w["bottom"]
+        }
     return None
 
 
@@ -271,7 +279,7 @@ def toggle_state_in_profile(profile_name, state_name, enabled):
 # ============ 截圖與模板 ============
 
 def capture_window(window, scale):
-    """截取視窗區域"""
+    """截取視窗區域（舊方法，截整個螢幕再裁切）"""
     screenshot = pyautogui.screenshot()
     screenshot_np = np.array(screenshot)
 
@@ -282,6 +290,76 @@ def capture_window(window, scale):
 
     cropped = screenshot_np[top:bottom, left:right]
     return cv2.cvtColor(cropped, cv2.COLOR_RGB2BGR)
+
+
+def capture_window_by_id(window_id, window, scale):
+    """
+    使用 Quartz 直接截取特定視窗（即使被遮蓋也能截圖）
+
+    Args:
+        window_id: Quartz window ID
+        window: 視窗邊界 dict (left, top, right, bottom)
+        scale: Retina 縮放比例
+
+    Returns:
+        numpy array (BGR format for OpenCV)
+    """
+    # 計算截圖區域（相對於螢幕）
+    region = Quartz.CGRectMake(
+        window["left"],
+        window["top"],
+        window["right"] - window["left"],
+        window["bottom"] - window["top"]
+    )
+
+    # 截取特定視窗的圖像
+    # kCGWindowListOptionIncludingWindow: 只截取指定視窗
+    # kCGWindowImageBoundsIgnoreFraming: 忽略視窗邊框，只截取內容
+    image = Quartz.CGWindowListCreateImage(
+        region,
+        Quartz.kCGWindowListOptionIncludingWindow,
+        window_id,
+        Quartz.kCGWindowImageBoundsIgnoreFraming
+    )
+
+    if image is None:
+        return None
+
+    # 取得圖像尺寸
+    width = Quartz.CGImageGetWidth(image)
+    height = Quartz.CGImageGetHeight(image)
+
+    if width == 0 or height == 0:
+        return None
+
+    # 建立 bitmap context 來取得像素資料
+    bytes_per_row = width * 4
+    color_space = Quartz.CGColorSpaceCreateDeviceRGB()
+
+    # 分配記憶體
+    buffer = ctypes.create_string_buffer(height * bytes_per_row)
+
+    context = Quartz.CGBitmapContextCreate(
+        buffer,
+        width,
+        height,
+        8,  # bits per component
+        bytes_per_row,
+        color_space,
+        Quartz.kCGImageAlphaPremultipliedFirst | Quartz.kCGBitmapByteOrder32Little
+    )
+
+    # 繪製圖像到 context
+    Quartz.CGContextDrawImage(context, Quartz.CGRectMake(0, 0, width, height), image)
+
+    # 轉換為 numpy array
+    img_data = np.frombuffer(buffer, dtype=np.uint8)
+    img_data = img_data.reshape((height, width, 4))
+
+    # BGRA -> BGR (移除 alpha channel)
+    bgr = img_data[:, :, :3]
+
+    return bgr
 
 
 def capture_and_save_template(name, window, scale, save_to_shared=True, profile_name=None):
@@ -456,18 +534,22 @@ def run_automation(profile_name, stop_event=None):
 
     # 嘗試自動偵測當前視窗位置
     detected = get_single_bluestacks_window()
+    window_id = None
     if detected:
         current_window = detected
+        window_id = detected.get("window_id")
         offset_x = current_window["left"] - reference_window["left"]
         offset_y = current_window["top"] - reference_window["top"]
         print(f"偵測到視窗位置: ({current_window['left']}, {current_window['top']})")
+        if window_id:
+            print(f"視窗 ID: {window_id} (支援背景截圖)")
         if offset_x != 0 or offset_y != 0:
             print(f"相對參考位置偏移: ({offset_x:+d}, {offset_y:+d})")
     else:
         current_window = config_window
         offset_x = 0
         offset_y = 0
-        print("未偵測到視窗，使用設定值")
+        print("未偵測到視窗，使用設定值（不支援背景截圖）")
 
     # 計算截圖用的視窗區域（套用偏移到原本的 config_window）
     window = {
@@ -511,7 +593,15 @@ def run_automation(profile_name, stop_event=None):
             if stop_event and stop_event.is_set():
                 break
 
-            current_frame = capture_window(window, scale)
+            # 優先使用視窗截圖（支援背景），否則用螢幕截圖
+            if window_id:
+                current_frame = capture_window_by_id(window_id, window, scale)
+                if current_frame is None:
+                    print("警告: 視窗截圖失敗，嘗試螢幕截圖")
+                    current_frame = capture_window(window, scale)
+            else:
+                current_frame = capture_window(window, scale)
+
             state, confidence, all_scores = match_state(
                 current_frame, templates, states, window, scale, threshold,
                 offset=(offset_x, offset_y)
