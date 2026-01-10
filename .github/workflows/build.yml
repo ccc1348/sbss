@@ -49,8 +49,13 @@ jobs:
             web.py
         shell: pwsh
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Zip release
+        run: Compress-Archive -Path dist/sbss/* -DestinationPath sbss-windows.zip
+        shell: pwsh
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: sbss-windows
-          path: dist/sbss/
+          files: sbss-windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
