@@ -1,130 +1,75 @@
-# Android 自動工具
+# sbss
 
-透過 ADB 自動辨識畫面並點擊，適用於 BlueStacks 等模擬器。支援多開、跨平台（macOS/Windows）。
+BlueStacks 自動掛機工具。截圖辨識畫面，自動點擊。
 
-## 需求
+## 下載
 
-- Python 3.8+
-- ADB（Android Debug Bridge）
-- BlueStacks 已啟用 ADB（設定 → 進階 → Android Debug Bridge）
+從 [Releases](https://github.com/ccc1348/sbss/releases) 下載最新版本，解壓縮即可使用。
 
-## 安裝
+## 快速開始
 
-```bash
-python3 -m venv venv
-./venv/bin/pip install -r requirements.txt
-```
+1. **開啟 BlueStacks**，進入遊戲
+2. **啟用 ADB**：BlueStacks 設定 → 進階 → Android Debug Bridge → 開啟
+3. **執行 sbss.exe**，自動開啟瀏覽器
 
-## 使用
+## 使用流程
 
-### Web 界面（推薦）
+### 建立腳本
 
-```bash
-./venv/bin/python web.py
-```
+1. 點擊 `+ 新增腳本`，輸入名稱
+2. 進入腳本後，點擊 `+ 新增步驟`
 
-自動開啟瀏覽器，在網頁上操作：
-- 管理 腳本 和步驟
-- 截圖選擇點擊位置和區域
-- 拖拽排序步驟
-- 啟動/暫停/停止運行
-- 即時日誌顯示
+### 錄製步驟
 
-### 命令行界面
+每個步驟 = 「看到這個畫面 → 點這裡」
 
-```bash
-./venv/bin/python run.py
-```
+1. **截圖**：擷取當前 BlueStacks 畫面
+2. **選區域**：框選要辨識的特徵區域（按鈕、圖示等）
+3. **選點擊位置**：指定匹配成功後要點哪裡
+4. **儲存**
 
-### 主選單
-- 選擇 腳本 進入操作
-- `[+]` 新增 腳本
-- `[r]` 併行運行
-- `[s]` 設定
+### 運行
 
-### 腳本 選單
-- 輸入數字選擇步驟
-- `[a]` 新增步驟
-- `[r]` 運行
-- `[e]` 測試比對
-
-### 步驟選單
-- `[m]` 編輯（重新錄製）
-- `[d]` 刪除
-- `[t]` 切換啟用
-- `[u]` 上移 / `[j]` 下移
-
-## 目錄結構
-
-```
-sbss/
-├── run.py                  # 入口
-├── core.py                 # 核心
-├── shared/
-│   └── settings.json       # 共用設定
-└── profiles/
-    └── <profile_name>/
-        ├── config.json     # 步驟設定
-        └── templates/      # 步驟截圖
-```
+1. 選擇設備（多開時會有多個）
+2. 點擊 `啟動`
+3. 程式會循環截圖 → 比對 → 點擊
 
 ## 設定說明
 
-### shared/settings.json
+| 設定 | 說明 | 預設 |
+|------|------|------|
+| 解析度 | BlueStacks 解析度 (寬x高) | 1080x1920 |
+| 相似度閾值 | 多像才算匹配 (0-1) | 0.8 |
+| 短間隔 | 正常檢測間隔 (秒) | 0.8 |
+| 長間隔 | 閒置時檢測間隔 (秒) | 10 |
+| 點擊延遲 | 點擊後等待範圍 (秒) | 0.8-1.5 |
 
-```json
-{
-  "resolution": [1080, 1920],
-  "match_threshold": 0.8,
-  "loop_interval": 0.8,
-  "long_interval": 10,
-  "miss_threshold": 5,
-  "start_delay": 2,
-  "click_delay": [0.8, 1.5],
-  "debug": true
-}
+## 多開支援
+
+BlueStacks 多開時，每個實例自動偵測：
+- 下拉選單選擇要控制的實例
+- 可同時開多個 sbss 視窗控制不同實例
+
+## 常見問題
+
+**Q: 找不到設備？**
+確認 BlueStacks 已啟用 ADB（設定 → 進階 → Android Debug Bridge）
+
+**Q: 截圖失敗？**
+重啟 BlueStacks，或嘗試重新連接 ADB
+
+**Q: 匹配不到？**
+- 調低相似度閾值
+- 選擇更獨特的特徵區域
+- 確認 BlueStacks 解析度與設定一致
+
+## 開發者
+
+```bash
+# 安裝
+python -m venv venv
+./venv/bin/pip install -r requirements.txt
+
+# 運行
+./venv/bin/python web.py
 ```
-
-| 欄位 | 說明 |
-|------|------|
-| resolution | BlueStacks 解析度 [寬, 高] |
-| match_threshold | 相似度閾值 0-1 |
-| loop_interval | 短間隔（秒）|
-| long_interval | 長間隔（秒）|
-| miss_threshold | 連續未命中幾次後切換長間隔 |
-| click_delay | 點擊後等待範圍 |
-| debug | 顯示比對分數 |
-
-### profiles/\<name\>/config.json
-
-```json
-{
-  "states": {
-    "步驟名稱": {
-      "click": [540, 960],
-      "region": [100, 200, 300, 400],
-      "enabled": true
-    }
-  }
-}
-```
-
-## 功能
-
-### 純 ADB 模式
-- 使用 ADB 截圖和點擊，視窗可被遮擋
-- 跨平台（macOS/Windows 使用同一套設定）
-- 座標都是 Android 座標
-
-### 解析度共用
-- BlueStacks 解析度相同，設定完全共用
-- 可複製整個 腳本 到其他機器
-
-## 多開
-
-BlueStacks 多開時，每個實例有不同 ADB 端口：
-- 實例 1: `localhost:5555`
-- 實例 2: `localhost:5565`
-- ...
-
-目前預設連接 `localhost:5555`。
