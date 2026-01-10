@@ -1,16 +1,18 @@
 # sbss
 
-BlueStacks 自動掛機工具。截圖辨識畫面，自動點擊。
+Android 模擬器自動掛機工具。透過 ADB 截圖辨識畫面，自動點擊。
 
 ## 下載
 
-從 [Releases](https://github.com/ccc1348/sbss/releases) 下載最新版本，解壓縮即可使用。
+**Windows**：從 [Releases](https://github.com/ccc1348/sbss/releases) 下載，解壓縮執行 `sbss.exe`
+
+**Mac/Linux**：見底部[開發者](#開發者)區塊
 
 ## 快速開始
 
-1. **開啟 BlueStacks**，進入遊戲
-2. **啟用 ADB**：BlueStacks 設定 → 進階 → Android Debug Bridge → 開啟
-3. **執行 sbss.exe**，自動開啟瀏覽器
+1. **開啟模擬器**（BlueStacks、LDPlayer、夜神等），進入遊戲
+2. **啟用 ADB**：模擬器設定中開啟 Android Debug Bridge
+3. **執行 sbss**，自動開啟瀏覽器
 
 ## 使用流程
 
