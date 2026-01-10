@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 import ctypes
+import subprocess
 from pathlib import Path
 from PIL import Image
 import Quartz
@@ -515,11 +516,86 @@ def match_state(current_frame, templates, states, window, scale, threshold, offs
     return best_match, best_confidence, all_scores
 
 
+# ============ ADB 點擊 ============
+
+def adb_connect(host="localhost", port=5555):
+    """連接 ADB"""
+    addr = f"{host}:{port}"
+    result = subprocess.run(
+        ["adb", "connect", addr],
+        capture_output=True, text=True
+    )
+    return "connected" in result.stdout.lower()
+
+
+def adb_get_resolution(device="localhost:5555"):
+    """取得 Android 解析度"""
+    result = subprocess.run(
+        ["adb", "-s", device, "shell", "wm", "size"],
+        capture_output=True, text=True
+    )
+    # 輸出格式: "Physical size: 1920x1080" 或 "Physical size: 1080x1920"
+    if result.returncode == 0:
+        for line in result.stdout.strip().split("\n"):
+            if "Physical size" in line:
+                size_str = line.split(":")[-1].strip()
+                w, h = map(int, size_str.split("x"))
+                return w, h
+    return None, None
+
+
+def adb_tap(android_x, android_y, device="localhost:5555"):
+    """ADB 點擊指定 Android 座標"""
+    result = subprocess.run(
+        ["adb", "-s", device, "shell", "input", "tap", str(android_x), str(android_y)],
+        capture_output=True, text=True
+    )
+    return result.returncode == 0
+
+
+def convert_to_android_coords(click_x, click_y, config_window, android_resolution):
+    """
+    將 macOS 螢幕座標轉換為 Android 座標
+
+    Args:
+        click_x, click_y: macOS 螢幕座標（原始錄製的點擊位置）
+        config_window: 遊戲視窗區域 dict (left, top, right, bottom)
+        android_resolution: (android_width, android_height)
+
+    Returns:
+        (android_x, android_y)
+    """
+    android_w, android_h = android_resolution
+
+    # 計算相對於 config_window 的位置
+    rel_x = click_x - config_window["left"]
+    rel_y = click_y - config_window["top"]
+
+    # config_window 尺寸
+    win_w = config_window["right"] - config_window["left"]
+    win_h = config_window["bottom"] - config_window["top"]
+
+    # 轉換到 Android 座標
+    android_x = int(rel_x * android_w / win_w)
+    android_y = int(rel_y * android_h / win_h)
+
+    return android_x, android_y
+
+
 def click_at(x, y, delay_range):
-    """點擊指定座標"""
+    """點擊指定座標（使用 pyautogui）"""
     pyautogui.click(x, y)
     delay = random.uniform(delay_range[0], delay_range[1])
     time.sleep(delay)
+
+
+def click_at_adb(click_x, click_y, config_window, android_resolution, delay_range, device="localhost:5555"):
+    """點擊指定座標（使用 ADB）"""
+    android_x, android_y = convert_to_android_coords(click_x, click_y, config_window, android_resolution)
+    adb_tap(android_x, android_y, device)
+    delay = random.uniform(delay_range[0], delay_range[1])
+    time.sleep(delay)
+    return android_x, android_y
 
 
 def run_automation(profile_name, stop_event=None):
@@ -550,6 +626,23 @@ def run_automation(profile_name, stop_event=None):
         offset_x = 0
         offset_y = 0
         print("未偵測到視窗，使用設定值（不支援背景截圖）")
+
+    # 嘗試連接 ADB
+    use_adb = False
+    android_resolution = None
+    if adb_connect():
+        android_w, android_h = adb_get_resolution()
+        if android_w and android_h:
+            # 確保是直向（高度 > 寬度）
+            if android_h < android_w:
+                android_w, android_h = android_h, android_w
+            android_resolution = (android_w, android_h)
+            use_adb = True
+            print(f"ADB 已連接 (解析度: {android_w}x{android_h})，滑鼠不會被佔用")
+        else:
+            print("ADB 連接成功但無法取得解析度，使用 pyautogui")
+    else:
+        print("ADB 未連接，使用 pyautogui 點擊（滑鼠會被佔用）")
 
     # 計算截圖用的視窗區域（套用偏移到原本的 config_window）
     window = {
@@ -614,9 +707,13 @@ def run_automation(profile_name, stop_event=None):
 
             if state:
                 orig_x, orig_y = states[state]["click"]
-                x, y = orig_x + offset_x, orig_y + offset_y
-                print(f">>> [{state}] {confidence:.2f} -> 點擊 ({x}, {y})")
-                click_at(x, y, click_delay)
+                if use_adb:
+                    android_x, android_y = click_at_adb(orig_x, orig_y, config_window, android_resolution, click_delay)
+                    print(f">>> [{state}] {confidence:.2f} -> ADB 點擊 ({android_x}, {android_y})")
+                else:
+                    x, y = orig_x + offset_x, orig_y + offset_y
+                    print(f">>> [{state}] {confidence:.2f} -> 點擊 ({x}, {y})")
+                    click_at(x, y, click_delay)
                 consecutive_misses = 0
                 if using_long_interval:
                     using_long_interval = False
