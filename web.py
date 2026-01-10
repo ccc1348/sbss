@@ -52,22 +52,8 @@ class Runner:
         self.thread.start()
         return True, "已啟動"
 
-    def pause(self):
-        if self.status == "running":
-            self.status = "paused"
-            self.log("已暫停")
-            return True
-        return False
-
-    def resume(self):
-        if self.status == "paused":
-            self.status = "running"
-            self.log("已繼續")
-            return True
-        return False
-
     def stop(self):
-        if self.status in ("running", "paused"):
+        if self.status == "running":
             self.status = "stopped"
             self.log("已停止")
             return True
@@ -92,11 +78,6 @@ class Runner:
         miss_count = 0
 
         while self.status != "stopped":
-            # 暫停時等待
-            if self.status == "paused":
-                time.sleep(0.5)
-                continue
-
             # 截圖
             screenshot = core.adb_screenshot()
             if screenshot is None:
@@ -408,20 +389,6 @@ def api_runner_start(profile_name):
     """啟動運行"""
     success, msg = runner.start(profile_name)
     return jsonify({"success": success, "message": msg})
-
-
-@app.route("/api/runner/pause", methods=["POST"])
-def api_runner_pause():
-    """暫停"""
-    success = runner.pause()
-    return jsonify({"success": success})
-
-
-@app.route("/api/runner/resume", methods=["POST"])
-def api_runner_resume():
-    """繼續"""
-    success = runner.resume()
-    return jsonify({"success": success})
 
 
 @app.route("/api/runner/stop", methods=["POST"])

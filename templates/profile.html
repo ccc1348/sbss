@@ -53,7 +53,6 @@
             background: #666;
         }
         .status-dot.running { background: #2ecc71; animation: pulse 1s infinite; }
-        .status-dot.paused { background: #f39c12; }
         .status-dot.stopped { background: #666; }
         @keyframes pulse {
             0%, 100% { opacity: 1; }
@@ -71,8 +70,6 @@
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-start { background: #2ecc71; color: #fff; }
         .btn-start:hover:not(:disabled) { background: #27ae60; }
-        .btn-pause { background: #f39c12; color: #fff; }
-        .btn-pause:hover:not(:disabled) { background: #d68910; }
         .btn-stop { background: #e74c3c; color: #fff; }
         .btn-stop:hover:not(:disabled) { background: #c0392b; }
         .log-area {
@@ -173,7 +170,6 @@
             </div>
             <div class="runner-buttons">
                 <button class="btn btn-start" id="btnStart" onclick="startRunner()">啟動</button>
-                <button class="btn btn-pause" id="btnPause" onclick="pauseRunner()" disabled>暫停</button>
                 <button class="btn btn-stop" id="btnStop" onclick="stopRunner()" disabled>停止</button>
             </div>
             <div class="log-area" id="logArea"></div>
@@ -224,14 +220,6 @@
             if (!data.success) alert(data.message);
         }
 
-        async function pauseRunner() {
-            await fetch('/api/runner/pause', { method: 'POST' });
-        }
-
-        async function resumeRunner() {
-            await fetch('/api/runner/resume', { method: 'POST' });
-        }
-
         async function stopRunner() {
             await fetch('/api/runner/stop', { method: 'POST' });
         }
@@ -240,7 +228,6 @@
             const dot = document.getElementById('statusDot');
             const text = document.getElementById('statusText');
             const btnStart = document.getElementById('btnStart');
-            const btnPause = document.getElementById('btnPause');
             const btnStop = document.getElementById('btnStop');
 
             dot.className = 'status-dot ' + status;
@@ -248,21 +235,10 @@
             if (status === 'running') {
                 text.textContent = '運行中';
                 btnStart.disabled = true;
-                btnPause.disabled = false;
-                btnPause.textContent = '暫停';
-                btnPause.onclick = pauseRunner;
-                btnStop.disabled = false;
-            } else if (status === 'paused') {
-                text.textContent = '已暫停';
-                btnStart.disabled = true;
-                btnPause.disabled = false;
-                btnPause.textContent = '繼續';
-                btnPause.onclick = resumeRunner;
                 btnStop.disabled = false;
             } else {
                 text.textContent = '已停止';
                 btnStart.disabled = false;
-                btnPause.disabled = true;
                 btnStop.disabled = true;
             }
         }
