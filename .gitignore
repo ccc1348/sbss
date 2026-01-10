@@ -1,0 +1,16 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# 截圖模板（每個人不同）
+templates/
+
+# 測試截圖
+*.png
+
+# 個人設定（座標因人而異）
+config.json
