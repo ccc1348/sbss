@@ -135,13 +135,16 @@ def get_shared_settings():
 
 
 def get_profile_list():
-    """取得所有 Profile 名稱"""
+    """取得所有 Profile 名稱（按建立時間排序，舊的在前）"""
     profiles = []
     if PROFILES_DIR.exists():
         for p in PROFILES_DIR.iterdir():
             if p.is_dir() and (p / "config.json").exists():
-                profiles.append(p.name)
-    return sorted(profiles)
+                config = load_json(p / "config.json")
+                created_at = config.get("created_at", 0)
+                profiles.append((created_at, p.name))
+    profiles.sort(key=lambda x: x[0])  # 按時間排序
+    return [name for _, name in profiles]
 
 
 def get_profile_dir(profile_name):
@@ -183,7 +186,7 @@ def create_profile(profile_name):
     profile_dir.mkdir(parents=True)
     (profile_dir / "templates").mkdir()
 
-    config = {"states": {}}
+    config = {"states": {}, "created_at": time.time()}
     save_profile_config(profile_name, config)
     return True, "建立成功"
 
@@ -196,6 +199,43 @@ def delete_profile(profile_name):
 
     shutil.rmtree(profile_dir)
     return True, "刪除成功"
+
+
+def clone_profile(source_name, target_name):
+    """複製 Profile（包含所有 templates）"""
+    source_dir = get_profile_dir(source_name)
+    target_dir = get_profile_dir(target_name)
+
+    if not source_dir.exists():
+        return False, "來源 Profile 不存在"
+    if target_dir.exists():
+        return False, "目標 Profile 已存在"
+
+    shutil.copytree(source_dir, target_dir)
+
+    # 更新 created_at 讓新腳本排在最後
+    config = get_profile_config(target_name)
+    config["created_at"] = time.time()
+    save_profile_config(target_name, config)
+
+    return True, "複製成功"
+
+
+def rename_profile(old_name, new_name):
+    """重新命名 Profile"""
+    if old_name == new_name:
+        return True, "名稱相同"
+
+    old_dir = get_profile_dir(old_name)
+    new_dir = get_profile_dir(new_name)
+
+    if not old_dir.exists():
+        return False, "Profile 不存在"
+    if new_dir.exists():
+        return False, "新名稱已存在"
+
+    old_dir.rename(new_dir)
+    return True, "改名成功"
 
 
 # ============ 狀態管理 ============

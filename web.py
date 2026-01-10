@@ -48,7 +48,7 @@ class ShutdownManager:
                     os._exit(0)
 
 
-shutdown_manager = ShutdownManager(timeout=5)
+shutdown_manager = ShutdownManager(timeout=15)
 
 # ============ 運行管理 ============
 
@@ -272,6 +272,34 @@ def api_delete_profile(name):
     success, msg = core.delete_profile(name)
     if success:
         return jsonify({"success": True})
+    return jsonify({"error": msg}), 400
+
+
+@app.route("/api/profile/<name>/clone", methods=["POST"])
+def api_clone_profile(name):
+    """複製 Profile"""
+    data = request.json
+    new_name = data.get("name", "").strip()
+    if not new_name:
+        return jsonify({"error": "名稱不能為空"}), 400
+
+    success, msg = core.clone_profile(name, new_name)
+    if success:
+        return jsonify({"success": True})
+    return jsonify({"error": msg}), 400
+
+
+@app.route("/api/profile/<name>/rename", methods=["POST"])
+def api_rename_profile(name):
+    """重新命名 Profile"""
+    data = request.json
+    new_name = data.get("name", "").strip()
+    if not new_name:
+        return jsonify({"error": "名稱不能為空"}), 400
+
+    success, msg = core.rename_profile(name, new_name)
+    if success:
+        return jsonify({"success": True, "new_name": new_name})
     return jsonify({"error": msg}), 400
 
 

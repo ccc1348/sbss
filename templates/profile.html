@@ -22,7 +22,17 @@
         }
         .back { color: #888; text-decoration: none; font-size: 24px; }
         .back:hover { color: #fff; }
-        h1 { flex: 1; }
+        h1 { flex: 1; display: flex; align-items: center; gap: 10px; }
+        .rename-btn {
+            background: #333;
+            border: none;
+            color: #888;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .rename-btn:hover { background: #4a69bd; color: #fff; }
         .delete-btn {
             background: transparent;
             border: 1px solid #e74c3c;
@@ -170,13 +180,50 @@
             padding: 40px;
             color: #666;
         }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: #16213e;
+            padding: 30px;
+            border-radius: 12px;
+            min-width: 300px;
+        }
+        .modal h2 { margin-bottom: 20px; }
+        .modal input {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: #0f1729;
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        .modal input:focus { outline: 2px solid #4a69bd; }
+        .modal-buttons { display: flex; gap: 10px; }
+        .btn-primary { background: #4a69bd; color: #fff; }
+        .btn-primary:hover { background: #3c5aa6; }
+        .btn-secondary { background: #333; color: #fff; }
+        .btn-secondary:hover { background: #444; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <a href="/" class="back">&larr;</a>
-            <h1>{{ name }}</h1>
+            <h1>
+                <span id="profileTitle">{{ name }}</span>
+                <button class="rename-btn" onclick="showRenameModal()">改名</button>
+            </h1>
             <button class="delete-btn" onclick="deleteProfile()">刪除腳本</button>
         </div>
 
@@ -232,6 +279,17 @@
                 <li class="empty-state">尚無步驟，點擊「+ 新增」開始</li>
             {% endif %}
         </ul>
+    </div>
+
+    <div class="modal" id="renameModal">
+        <div class="modal-content">
+            <h2>重新命名腳本</h2>
+            <input type="text" id="renameName" placeholder="新名稱">
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="hideRenameModal()">取消</button>
+                <button class="btn btn-primary" onclick="renameProfile()">確定</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -357,6 +415,44 @@
             });
             if (res.ok) window.location.href = '/';
         }
+
+        // ========== 改名 ==========
+        function showRenameModal() {
+            document.getElementById('renameName').value = profileName;
+            document.getElementById('renameModal').classList.add('show');
+            document.getElementById('renameName').focus();
+            document.getElementById('renameName').select();
+        }
+
+        function hideRenameModal() {
+            document.getElementById('renameModal').classList.remove('show');
+        }
+
+        async function renameProfile() {
+            const newName = document.getElementById('renameName').value.trim();
+            if (!newName) return;
+
+            const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/rename`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName })
+            });
+
+            if (res.ok) {
+                window.location.href = '/profile/' + encodeURIComponent(newName);
+            } else {
+                const data = await res.json();
+                alert(data.error || '改名失敗');
+            }
+        }
+
+        document.getElementById('renameName').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') renameProfile();
+        });
+
+        document.getElementById('renameModal').addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) hideRenameModal();
+        });
 
         // ========== 拖拽排序 ==========
         const stateList = document.getElementById('stateList');
