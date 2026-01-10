@@ -407,7 +407,9 @@ def run_automation(profile_name, stop_event=None):
     window = profile_config["window"]
     scale = settings["scale"]
     threshold = settings["match_threshold"]
-    interval = settings["loop_interval"]
+    short_interval = settings["loop_interval"]
+    long_interval = settings.get("long_interval", 10.0)
+    miss_threshold = settings.get("miss_threshold", 5)
     start_delay = settings.get("start_delay", 5)
     click_delay = settings["click_delay"]
     debug = settings.get("debug", False)
@@ -421,12 +423,15 @@ def run_automation(profile_name, stop_event=None):
         return
 
     print(f"\n已載入 {len(templates)} 個狀態")
-    print(f"閾值: {threshold} | 間隔: {interval}s | Debug: {debug}")
+    print(f"閾值: {threshold} | 短間隔: {short_interval}s | 長間隔: {long_interval}s | Debug: {debug}")
     print(f"\n{start_delay} 秒後開始運行...")
     print("按 Ctrl+C 停止\n")
     time.sleep(start_delay)
 
     print("開始監控...\n")
+
+    consecutive_misses = 0
+    using_long_interval = False
 
     try:
         while True:
@@ -440,14 +445,25 @@ def run_automation(profile_name, stop_event=None):
 
             if debug:
                 scores_str = " | ".join([f"{k}: {v:.2f}" for k, v in all_scores.items()])
-                print(f"[DEBUG] {scores_str}")
+                interval_mode = "長" if using_long_interval else "短"
+                print(f"[DEBUG] [{interval_mode}] {scores_str}")
 
             if state:
                 x, y = states[state]["click"]
                 print(f">>> [{state}] {confidence:.2f} -> 點擊 ({x}, {y})")
                 click_at(x, y, click_delay)
+                consecutive_misses = 0
+                if using_long_interval:
+                    using_long_interval = False
+                    print("切換到短間隔模式")
+            else:
+                consecutive_misses += 1
+                if not using_long_interval and consecutive_misses >= miss_threshold:
+                    using_long_interval = True
+                    print(f"連續 {miss_threshold} 次未命中，切換到長間隔模式")
 
-            time.sleep(interval)
+            current_interval = long_interval if using_long_interval else short_interval
+            time.sleep(current_interval)
 
     except KeyboardInterrupt:
         print("\n\n已停止運行")
