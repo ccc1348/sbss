@@ -4,263 +4,61 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ '新增' if is_new else '編輯' }}步驟 - {{ profile }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script defer src="/static/js/alpine.min.js"></script>
+    <script src="/static/js/common.js"></script>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #1a1a2e;
-            color: #eee;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .header {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .back { color: #888; text-decoration: none; font-size: 24px; }
-        .back:hover { color: #fff; }
-        h1 { flex: 1; font-size: 20px; }
-
-        .device-bar {
-            background: #0d1b2a;
-            border: 1px solid #1f4068;
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .device-bar-label { color: #888; font-size: 14px; }
-        .device-bar select {
-            padding: 8px 12px;
-            border: none;
-            border-radius: 6px;
-            background: #16213e;
-            color: #fff;
-            font-size: 14px;
-            min-width: 200px;
-            cursor: pointer;
-        }
-        .device-bar select:focus { outline: 2px solid #4a69bd; }
-        .device-bar button {
-            background: #333;
-            border: none;
-            color: #fff;
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .device-bar button:hover { background: #444; }
-        .device-bar .status {
-            margin-left: auto;
-            font-size: 13px;
-        }
-        .device-bar .status.connected { color: #2ecc71; }
-        .device-bar .status.disconnected { color: #e74c3c; }
-
-        .main {
-            display: grid;
-            grid-template-columns: 1fr 300px;
-            gap: 20px;
-        }
-
-        /* 截圖區 */
-        .screenshot-area {
-            background: #16213e;
-            border-radius: 12px;
-            padding: 20px;
-        }
-        .screenshot-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
+        .container { max-width: 1200px; }
+        .main { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+        .sidebar { display: flex; flex-direction: column; gap: 20px; }
+        .panel h3 { font-size: 14px; color: var(--text-secondary); margin-bottom: 15px; }
+        .btn-save { width: 100%; padding: 12px; font-size: 16px; }
+        .help-text { font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
+        .empty-regions { color: var(--text-muted); font-size: 13px; }
+        .screenshot-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
         .screenshot-header h2 { flex: 1; font-size: 16px; }
-        .btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .btn-primary { background: #4a69bd; color: #fff; }
-        .btn-primary:hover { background: #3c5aa6; }
-        .device-select {
-            padding: 8px 12px;
-            border: none;
-            border-radius: 6px;
-            background: #0f1729;
-            color: #fff;
-            font-size: 14px;
-            min-width: 160px;
-            cursor: pointer;
-        }
-        .device-select:focus { outline: 2px solid #4a69bd; }
-        .btn-secondary { background: #333; color: #fff; }
-        .btn-secondary:hover { background: #444; }
-        .btn-success { background: #2ecc71; color: #fff; }
-        .btn-success:hover { background: #27ae60; }
-
-        .canvas-container {
-            position: relative;
-            display: inline-block;
-            background: #0f1729;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        #canvas {
-            display: block;
-            cursor: crosshair;
-        }
-        .placeholder {
-            padding: 100px 50px;
-            text-align: center;
-            color: #666;
-        }
-
-        .mode-buttons {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        .mode-btn {
-            padding: 8px 16px;
-            border: 2px solid #333;
-            background: transparent;
-            color: #888;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-        .mode-btn.active {
-            border-color: #4a69bd;
-            color: #4a69bd;
-        }
-
-        /* 側邊欄 */
-        .sidebar {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-        .panel {
-            background: #16213e;
-            border-radius: 12px;
-            padding: 20px;
-        }
-        .panel h3 {
-            font-size: 14px;
-            color: #888;
-            margin-bottom: 15px;
-        }
-        .form-group { margin-bottom: 15px; }
-        .form-group label {
-            display: block;
-            font-size: 13px;
-            color: #888;
-            margin-bottom: 5px;
-        }
-        .form-group input {
-            width: 100%;
-            padding: 10px;
-            border: none;
-            border-radius: 6px;
-            background: #0f1729;
-            color: #fff;
-            font-size: 14px;
-        }
-        .form-group input:focus { outline: 2px solid #4a69bd; }
-
-        .coord-display {
-            font-family: monospace;
-            background: #0f1729;
-            padding: 10px;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        .coord-display.empty { color: #666; }
-
-        .region-list { list-style: none; }
-        .region-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px;
-            background: #0f1729;
-            border-radius: 6px;
-            margin-bottom: 8px;
-            font-family: monospace;
-            font-size: 13px;
-        }
-        .region-item .color {
-            width: 12px;
-            height: 12px;
-            border-radius: 3px;
-        }
-        .region-item span { flex: 1; }
-        .region-item button {
-            background: transparent;
-            border: none;
-            color: #e74c3c;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        .empty-regions { color: #666; font-size: 13px; }
-
-        .save-area {
-            margin-top: auto;
-        }
-        .btn-save {
-            width: 100%;
-            padding: 12px;
-            font-size: 16px;
-        }
-        .help-text {
-            font-size: 12px;
-            color: #666;
-            margin-top: 10px;
-            line-height: 1.5;
-        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="device-bar">
+    <div class="container" x-data="editorPage()" x-init="init()">
+        <!-- 設備選擇欄 -->
+        <div class="device-bar" x-data="deviceBar()" x-init="init()">
             <span class="device-bar-label">控制設備：</span>
-            <select id="globalDevice" onchange="saveDevice()">
-                <option value="">載入中...</option>
+            <select x-model="selected" @change="save()" :disabled="loading">
+                <template x-if="loading">
+                    <option value="">掃描中...</option>
+                </template>
+                <template x-if="!loading && devices.length === 0">
+                    <option value="">未偵測到設備</option>
+                </template>
+                <template x-for="d in devices" :key="d.id">
+                    <option :value="d.id" x-text="d.name"></option>
+                </template>
             </select>
-            <button onclick="refreshDevices()">重新整理</button>
-            <span class="status" id="deviceStatus"></span>
+            <button @click="refresh()">重新整理</button>
+            <span class="status" :class="statusClass" x-text="status"></span>
         </div>
 
         <div class="header">
             <a href="/profile/{{ profile }}" class="back">&larr;</a>
-            <h1>{{ '新增' if is_new else '編輯' }}步驟</h1>
+            <h1 class="flex-1" style="font-size: 20px;">{{ '新增' if is_new else '編輯' }}步驟</h1>
         </div>
 
         <div class="main">
-            <div class="screenshot-area">
+            <div class="panel">
                 <div class="screenshot-header">
                     <h2>截圖</h2>
-                    <button class="btn btn-secondary" onclick="takeScreenshot()">擷取畫面</button>
+                    <button class="btn btn-secondary" @click="takeScreenshot()">擷取畫面</button>
                 </div>
 
                 <div class="mode-buttons">
-                    <button class="mode-btn active" id="modeClick" onclick="setMode('click')">選擇點擊位置</button>
-                    <button class="mode-btn" id="modeRegion" onclick="setMode('region')">選擇區域</button>
+                    <button class="mode-btn" :class="{ active: mode === 'click' }" @click="mode = 'click'">選擇點擊位置</button>
+                    <button class="mode-btn" :class="{ active: mode === 'region' }" @click="mode = 'region'">選擇區域</button>
                 </div>
 
-                <div class="canvas-container" id="canvasContainer">
-                    <div class="placeholder" id="placeholder">
-                        點擊「重新截圖」取得畫面
-                    </div>
-                    <canvas id="canvas" style="display:none;"></canvas>
+                <div class="canvas-container">
+                    <div class="placeholder" x-show="!imageData">點擊「擷取畫面」取得畫面</div>
+                    <canvas id="canvas" x-show="imageData" style="display:none;"></canvas>
                 </div>
             </div>
 
@@ -268,50 +66,33 @@
                 <div class="panel">
                     <h3>步驟名稱</h3>
                     <div class="form-group">
-                        <input type="text" id="stateName" value="{{ state_name or '' }}"
-                               placeholder="例：進入副本">
+                        <input type="text" x-model="stateName" placeholder="例：進入副本">
                     </div>
                 </div>
 
                 <div class="panel">
                     <h3>點擊位置</h3>
-                    <div class="coord-display {{ 'empty' if not config or not config.get('click') else '' }}" id="clickDisplay">
-                        {% if config and config.get('click') %}
-                            ({{ config.click[0] }}, {{ config.click[1] }})
-                        {% else %}
-                            點擊截圖選擇
-                        {% endif %}
+                    <div class="coord-display" :class="{ empty: !clickPos }">
+                        <span x-text="clickPos ? `(${clickPos[0]}, ${clickPos[1]})` : '點擊截圖選擇'"></span>
                     </div>
                 </div>
 
                 <div class="panel">
                     <h3>比對區域</h3>
-                    <ul class="region-list" id="regionList">
-                        {% if config %}
-                            {% if config.get('region') %}
-                                <li class="region-item">
-                                    <div class="color" style="background: #e74c3c"></div>
-                                    <span>{{ config.region }}</span>
-                                    <button onclick="removeRegion(0)">&times;</button>
-                                </li>
-                            {% elif config.get('regions') %}
-                                {% for r in config.regions %}
-                                <li class="region-item">
-                                    <div class="color" style="background: {{ ['#e74c3c','#3498db','#2ecc71','#f39c12'][loop.index0 % 4] }}"></div>
-                                    <span>{{ r }}</span>
-                                    <button onclick="removeRegion({{ loop.index0 }})">&times;</button>
-                                </li>
-                                {% endfor %}
-                            {% endif %}
-                        {% endif %}
+                    <ul class="region-list">
+                        <template x-for="(r, i) in regions" :key="i">
+                            <li class="region-item">
+                                <div class="color" :style="{ background: regionColors[i % regionColors.length] }"></div>
+                                <span x-text="`[${r.join(', ')}]`"></span>
+                                <button @click="removeRegion(i)">&times;</button>
+                            </li>
+                        </template>
                     </ul>
-                    <div class="empty-regions" id="emptyRegions" {% if config and (config.get('region') or config.get('regions')) %}style="display:none"{% endif %}>
-                        拖拽截圖選擇區域
-                    </div>
+                    <div class="empty-regions" x-show="regions.length === 0">拖拽截圖選擇區域</div>
                 </div>
 
-                <div class="panel save-area">
-                    <button class="btn btn-success btn-save" onclick="saveState()">儲存</button>
+                <div class="panel mt-auto">
+                    <button class="btn btn-success btn-save" @click="saveState()">儲存</button>
                     <div class="help-text">
                         1. 先截圖<br>
                         2. 點擊選擇「點擊位置」<br>
@@ -324,376 +105,255 @@
     </div>
 
     <script>
-        const profileName = "{{ profile }}";
-        const isNew = {{ 'true' if is_new else 'false' }};
+        function editorPage() {
+            const profileName = "{{ profile }}";
+            const isNew = {{ 'true' if is_new else 'false' }};
+            const regionColors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12'];
 
-        // ========== 設備管理 ==========
-        async function refreshDevices() {
-            const select = document.getElementById('globalDevice');
-            const status = document.getElementById('deviceStatus');
-            select.innerHTML = '<option value="">掃描中...</option>';
-            status.textContent = '';
-            status.className = 'status';
+            return {
+                profileName,
+                isNew,
+                regionColors,
+                stateName: "{{ state_name or '' }}",
+                mode: 'click',
+                clickPos: {{ config.click | tojson if config and config.get('click') else 'null' }},
+                regions: [],
+                imageData: null,
+                imageWidth: 0,
+                imageHeight: 0,
+                scale: 1,
+                canvas: null,
+                ctx: null,
+                isDragging: false,
+                dragStart: null,
+                dragEnd: null,
 
-            try {
-                const res = await fetch('/api/devices');
-                const data = await res.json();
-                const devices = data.devices || [];
+                init() {
+                    // 初始化已有區域
+                    {% if config %}
+                        {% if config.get('region') %}
+                            this.regions = [{{ config.region | tojson }}];
+                        {% elif config.get('regions') %}
+                            this.regions = {{ config.regions | tojson }};
+                        {% endif %}
+                    {% endif %}
 
-                if (devices.length === 0) {
-                    select.innerHTML = '<option value="">未偵測到設備</option>';
-                    status.textContent = '請開啟模擬器';
-                    status.className = 'status disconnected';
-                } else {
-                    select.innerHTML = devices.map(d =>
-                        `<option value="${d.id}">${d.name}</option>`
-                    ).join('');
+                    // 如果是編輯模式，載入已有截圖
+                    {% if not is_new %}
+                    this.loadExistingScreenshot();
+                    {% endif %}
+                },
 
-                    // 恢復上次選擇
-                    const saved = localStorage.getItem('selectedDevice');
-                    if (saved && devices.some(d => d.id === saved)) {
-                        select.value = saved;
+                async loadExistingScreenshot() {
+                    const res = await fetch(`/api/profile/${encodeURIComponent(this.profileName)}/state/${encodeURIComponent("{{ state_name }}")}/screenshot`);
+                    const data = await res.json();
+
+                    if (data.error) {
+                        console.log('No existing screenshot');
+                        return;
                     }
-                    saveDevice();
-                    status.textContent = '已連線';
-                    status.className = 'status connected';
+
+                    this.imageData = data.image;
+                    this.imageWidth = data.width;
+                    this.imageHeight = data.height;
+                    this.setupCanvas();
+                },
+
+                async takeScreenshot() {
+                    const device = getSelectedDevice();
+                    if (!device) {
+                        alert('請先選擇設備');
+                        return;
+                    }
+
+                    const res = await fetch(`/api/screenshot?device=${encodeURIComponent(device)}`);
+                    const data = await res.json();
+
+                    if (data.error) {
+                        alert(data.error);
+                        return;
+                    }
+
+                    this.imageData = data.image;
+                    this.imageWidth = data.width;
+                    this.imageHeight = data.height;
+                    this.setupCanvas();
+                },
+
+                setupCanvas() {
+                    this.canvas = document.getElementById('canvas');
+                    this.canvas.style.display = 'block';
+                    this.ctx = this.canvas.getContext('2d');
+
+                    const maxWidth = 500;
+                    this.scale = Math.min(maxWidth / this.imageWidth, 1);
+                    this.canvas.width = this.imageWidth * this.scale;
+                    this.canvas.height = this.imageHeight * this.scale;
+
+                    const img = new Image();
+                    img.onload = () => {
+                        this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+                        this.drawOverlays();
+                    };
+                    img.src = 'data:image/png;base64,' + this.imageData;
+
+                    this.canvas.onmousedown = (e) => this.onMouseDown(e);
+                    this.canvas.onmousemove = (e) => this.onMouseMove(e);
+                    this.canvas.onmouseup = (e) => this.onMouseUp(e);
+                    this.canvas.onmouseleave = (e) => this.onMouseUp(e);
+                },
+
+                drawOverlays() {
+                    if (!this.ctx || !this.imageData) return;
+
+                    const img = new Image();
+                    img.onload = () => {
+                        this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+
+                        // 畫區域
+                        this.regions.forEach((r, i) => {
+                            this.ctx.strokeStyle = this.regionColors[i % this.regionColors.length];
+                            this.ctx.lineWidth = 2;
+                            this.ctx.strokeRect(
+                                r[0] * this.scale,
+                                r[1] * this.scale,
+                                (r[2] - r[0]) * this.scale,
+                                (r[3] - r[1]) * this.scale
+                            );
+                        });
+
+                        // 畫拖拽中的區域
+                        if (this.isDragging && this.dragStart && this.dragEnd) {
+                            this.ctx.strokeStyle = '#fff';
+                            this.ctx.setLineDash([5, 5]);
+                            this.ctx.lineWidth = 2;
+                            const x = Math.min(this.dragStart.x, this.dragEnd.x);
+                            const y = Math.min(this.dragStart.y, this.dragEnd.y);
+                            const w = Math.abs(this.dragEnd.x - this.dragStart.x);
+                            const h = Math.abs(this.dragEnd.y - this.dragStart.y);
+                            this.ctx.strokeRect(x, y, w, h);
+                            this.ctx.setLineDash([]);
+                        }
+
+                        // 畫點擊位置
+                        if (this.clickPos) {
+                            const x = this.clickPos[0] * this.scale;
+                            const y = this.clickPos[1] * this.scale;
+
+                            this.ctx.strokeStyle = '#2ecc71';
+                            this.ctx.lineWidth = 2;
+
+                            this.ctx.beginPath();
+                            this.ctx.moveTo(x - 15, y);
+                            this.ctx.lineTo(x + 15, y);
+                            this.ctx.moveTo(x, y - 15);
+                            this.ctx.lineTo(x, y + 15);
+                            this.ctx.stroke();
+
+                            this.ctx.fillStyle = '#2ecc71';
+                            this.ctx.beginPath();
+                            this.ctx.arc(x, y, 5, 0, Math.PI * 2);
+                            this.ctx.fill();
+                        }
+                    };
+                    img.src = 'data:image/png;base64,' + this.imageData;
+                },
+
+                onMouseDown(e) {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+
+                    if (this.mode === 'click') {
+                        this.clickPos = [Math.round(x / this.scale), Math.round(y / this.scale)];
+                        this.drawOverlays();
+                    } else {
+                        this.isDragging = true;
+                        this.dragStart = { x, y };
+                        this.dragEnd = { x, y };
+                    }
+                },
+
+                onMouseMove(e) {
+                    if (!this.isDragging) return;
+
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.dragEnd = {
+                        x: e.clientX - rect.left,
+                        y: e.clientY - rect.top
+                    };
+                    this.drawOverlays();
+                },
+
+                onMouseUp(e) {
+                    if (!this.isDragging) return;
+                    this.isDragging = false;
+
+                    if (this.dragStart && this.dragEnd) {
+                        const x1 = Math.round(Math.min(this.dragStart.x, this.dragEnd.x) / this.scale);
+                        const y1 = Math.round(Math.min(this.dragStart.y, this.dragEnd.y) / this.scale);
+                        const x2 = Math.round(Math.max(this.dragStart.x, this.dragEnd.x) / this.scale);
+                        const y2 = Math.round(Math.max(this.dragStart.y, this.dragEnd.y) / this.scale);
+
+                        if (x2 - x1 > 10 && y2 - y1 > 10) {
+                            this.regions.push([x1, y1, x2, y2]);
+                        }
+                    }
+
+                    this.dragStart = null;
+                    this.dragEnd = null;
+                    this.drawOverlays();
+                },
+
+                removeRegion(index) {
+                    this.regions.splice(index, 1);
+                    this.drawOverlays();
+                },
+
+                async saveState() {
+                    if (!this.stateName.trim()) {
+                        alert('請輸入步驟名稱');
+                        return;
+                    }
+                    if (!this.clickPos) {
+                        alert('請選擇點擊位置');
+                        return;
+                    }
+                    if (this.regions.length === 0) {
+                        alert('請選擇至少一個區域');
+                        return;
+                    }
+                    if (!this.imageData && this.isNew) {
+                        alert('請先截圖');
+                        return;
+                    }
+
+                    const payload = {
+                        name: this.stateName.trim(),
+                        click: this.clickPos,
+                        regions: this.regions,
+                        screenshot: this.imageData
+                    };
+
+                    if (!this.isNew) {
+                        payload.old_name = "{{ state_name or '' }}";
+                    }
+
+                    const res = await fetch(`/api/profile/${encodeURIComponent(this.profileName)}/state`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await res.json();
+                    if (data.success) {
+                        window.location.href = `/profile/${encodeURIComponent(this.profileName)}`;
+                    } else {
+                        alert(data.error || '儲存失敗');
+                    }
                 }
-            } catch (e) {
-                select.innerHTML = '<option value="">載入失敗</option>';
-                status.textContent = '連線錯誤';
-                status.className = 'status disconnected';
-            }
-        }
-
-        function saveDevice() {
-            const device = document.getElementById('globalDevice').value;
-            if (device) {
-                localStorage.setItem('selectedDevice', device);
-            }
-        }
-
-        function getSelectedDevice() {
-            return localStorage.getItem('selectedDevice') || '';
-        }
-
-        // 頁面載入時刷新設備
-        refreshDevices();
-
-        let canvas, ctx;
-        let imageData = null;  // base64
-        let imageWidth = 0;
-        let imageHeight = 0;
-        let scale = 1;
-
-        let mode = 'click';  // click or region
-        let clickPos = {{ config.click | tojson if config and config.get('click') else 'null' }};
-        let regions = [];
-
-        // 初始化已有區域
-        {% if config %}
-            {% if config.get('region') %}
-                regions = [{{ config.region | tojson }}];
-            {% elif config.get('regions') %}
-                regions = {{ config.regions | tojson }};
-            {% endif %}
-        {% endif %}
-
-        const regionColors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12'];
-
-        // 拖拽步驟
-        let isDragging = false;
-        let dragStart = null;
-        let dragEnd = null;
-
-        function setMode(m) {
-            mode = m;
-            document.getElementById('modeClick').classList.toggle('active', m === 'click');
-            document.getElementById('modeRegion').classList.toggle('active', m === 'region');
-        }
-
-        async function takeScreenshot() {
-            const device = getSelectedDevice();
-            if (!device) {
-                alert('請先選擇設備');
-                return;
-            }
-
-            const res = await fetch(`/api/screenshot?device=${encodeURIComponent(device)}`);
-            const data = await res.json();
-
-            if (data.error) {
-                alert(data.error);
-                return;
-            }
-
-            imageData = data.image;
-            imageWidth = data.width;
-            imageHeight = data.height;
-
-            // 顯示 canvas
-            document.getElementById('placeholder').style.display = 'none';
-            canvas = document.getElementById('canvas');
-            canvas.style.display = 'block';
-            ctx = canvas.getContext('2d');
-
-            // 計算縮放
-            const maxWidth = 500;
-            scale = Math.min(maxWidth / imageWidth, 1);
-            canvas.width = imageWidth * scale;
-            canvas.height = imageHeight * scale;
-
-            // 載入圖片
-            const img = new Image();
-            img.onload = () => {
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                drawOverlays();
             };
-            img.src = 'data:image/png;base64,' + imageData;
-
-            // 綁定事件
-            canvas.onmousedown = onMouseDown;
-            canvas.onmousemove = onMouseMove;
-            canvas.onmouseup = onMouseUp;
-            canvas.onmouseleave = onMouseUp;
         }
-
-        function drawOverlays() {
-            if (!ctx || !imageData) return;
-
-            // 重繪圖片
-            const img = new Image();
-            img.onload = () => {
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                // 畫區域
-                regions.forEach((r, i) => {
-                    ctx.strokeStyle = regionColors[i % regionColors.length];
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(
-                        r[0] * scale,
-                        r[1] * scale,
-                        (r[2] - r[0]) * scale,
-                        (r[3] - r[1]) * scale
-                    );
-                });
-
-                // 畫拖拽中的區域
-                if (isDragging && dragStart && dragEnd) {
-                    ctx.strokeStyle = '#fff';
-                    ctx.setLineDash([5, 5]);
-                    ctx.lineWidth = 2;
-                    const x = Math.min(dragStart.x, dragEnd.x);
-                    const y = Math.min(dragStart.y, dragEnd.y);
-                    const w = Math.abs(dragEnd.x - dragStart.x);
-                    const h = Math.abs(dragEnd.y - dragStart.y);
-                    ctx.strokeRect(x, y, w, h);
-                    ctx.setLineDash([]);
-                }
-
-                // 畫點擊位置
-                if (clickPos) {
-                    const x = clickPos[0] * scale;
-                    const y = clickPos[1] * scale;
-
-                    ctx.strokeStyle = '#2ecc71';
-                    ctx.lineWidth = 2;
-
-                    // 十字
-                    ctx.beginPath();
-                    ctx.moveTo(x - 15, y);
-                    ctx.lineTo(x + 15, y);
-                    ctx.moveTo(x, y - 15);
-                    ctx.lineTo(x, y + 15);
-                    ctx.stroke();
-
-                    // 圓點
-                    ctx.fillStyle = '#2ecc71';
-                    ctx.beginPath();
-                    ctx.arc(x, y, 5, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            };
-            img.src = 'data:image/png;base64,' + imageData;
-        }
-
-        function onMouseDown(e) {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            if (mode === 'click') {
-                clickPos = [Math.round(x / scale), Math.round(y / scale)];
-                updateClickDisplay();
-                drawOverlays();
-            } else {
-                isDragging = true;
-                dragStart = { x, y };
-                dragEnd = { x, y };
-            }
-        }
-
-        function onMouseMove(e) {
-            if (!isDragging) return;
-
-            const rect = canvas.getBoundingClientRect();
-            dragEnd = {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top
-            };
-            drawOverlays();
-        }
-
-        function onMouseUp(e) {
-            if (!isDragging) return;
-            isDragging = false;
-
-            if (dragStart && dragEnd) {
-                const x1 = Math.round(Math.min(dragStart.x, dragEnd.x) / scale);
-                const y1 = Math.round(Math.min(dragStart.y, dragEnd.y) / scale);
-                const x2 = Math.round(Math.max(dragStart.x, dragEnd.x) / scale);
-                const y2 = Math.round(Math.max(dragStart.y, dragEnd.y) / scale);
-
-                // 至少 10x10
-                if (x2 - x1 > 10 && y2 - y1 > 10) {
-                    regions.push([x1, y1, x2, y2]);
-                    updateRegionList();
-                }
-            }
-
-            dragStart = null;
-            dragEnd = null;
-            drawOverlays();
-        }
-
-        function updateClickDisplay() {
-            const el = document.getElementById('clickDisplay');
-            if (clickPos) {
-                el.textContent = `(${clickPos[0]}, ${clickPos[1]})`;
-                el.classList.remove('empty');
-            } else {
-                el.textContent = '點擊截圖選擇';
-                el.classList.add('empty');
-            }
-        }
-
-        function updateRegionList() {
-            const list = document.getElementById('regionList');
-            const empty = document.getElementById('emptyRegions');
-
-            list.innerHTML = '';
-            regions.forEach((r, i) => {
-                const li = document.createElement('li');
-                li.className = 'region-item';
-                li.innerHTML = `
-                    <div class="color" style="background: ${regionColors[i % regionColors.length]}"></div>
-                    <span>[${r.join(', ')}]</span>
-                    <button onclick="removeRegion(${i})">&times;</button>
-                `;
-                list.appendChild(li);
-            });
-
-            empty.style.display = regions.length ? 'none' : 'block';
-        }
-
-        function removeRegion(index) {
-            regions.splice(index, 1);
-            updateRegionList();
-            drawOverlays();
-        }
-
-        async function saveState() {
-            const name = document.getElementById('stateName').value.trim();
-
-            if (!name) {
-                alert('請輸入步驟名稱');
-                return;
-            }
-            if (!clickPos) {
-                alert('請選擇點擊位置');
-                return;
-            }
-            if (regions.length === 0) {
-                alert('請選擇至少一個區域');
-                return;
-            }
-            if (!imageData && isNew) {
-                alert('請先截圖');
-                return;
-            }
-
-            const payload = {
-                name: name,
-                click: clickPos,
-                regions: regions,
-                screenshot: imageData
-            };
-
-            // 編輯模式：傳遞舊名稱以便處理重命名
-            if (!isNew) {
-                payload.old_name = "{{ state_name or '' }}";
-            }
-
-            const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/state`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            const data = await res.json();
-            if (data.success) {
-                window.location.href = `/profile/${encodeURIComponent(profileName)}`;
-            } else {
-                alert(data.error || '儲存失敗');
-            }
-        }
-
-        // 如果是編輯模式，自動載入已有截圖
-        {% if not is_new %}
-        async function loadExistingScreenshot() {
-            const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/state/${encodeURIComponent("{{ state_name }}")}/screenshot`);
-            const data = await res.json();
-
-            if (data.error) {
-                console.log('No existing screenshot');
-                return;
-            }
-
-            imageData = data.image;
-            imageWidth = data.width;
-            imageHeight = data.height;
-
-            // 顯示 canvas
-            document.getElementById('placeholder').style.display = 'none';
-            canvas = document.getElementById('canvas');
-            canvas.style.display = 'block';
-            ctx = canvas.getContext('2d');
-
-            // 計算縮放
-            const maxWidth = 500;
-            scale = Math.min(maxWidth / imageWidth, 1);
-            canvas.width = imageWidth * scale;
-            canvas.height = imageHeight * scale;
-
-            // 載入圖片
-            const img = new Image();
-            img.onload = () => {
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                drawOverlays();
-            };
-            img.src = 'data:image/png;base64,' + imageData;
-
-            // 綁定事件
-            canvas.onmousedown = onMouseDown;
-            canvas.onmousemove = onMouseMove;
-            canvas.onmouseup = onMouseUp;
-            canvas.onmouseleave = onMouseUp;
-        }
-
-        loadExistingScreenshot();
-        {% endif %}
-
-        // 心跳（用於自動關閉檢測）
-        setInterval(() => fetch('/api/heartbeat', { method: 'POST' }), 2000);
     </script>
 </body>
 </html>

@@ -4,25 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ name }} - Android 自動工具</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script defer src="/static/js/alpine.min.js"></script>
+    <script src="/static/js/common.js"></script>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #1a1a2e;
-            color: #eee;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container { max-width: 900px; margin: 0 auto; }
-        .header {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-        .back { color: #888; text-decoration: none; font-size: 24px; }
-        .back:hover { color: #fff; }
-        h1 { flex: 1; display: flex; align-items: center; gap: 10px; }
+        .container { max-width: 900px; }
         .rename-btn {
             background: #333;
             border: none;
@@ -32,288 +18,90 @@
             cursor: pointer;
             font-size: 12px;
         }
-        .rename-btn:hover { background: #4a69bd; color: #fff; }
-        .delete-btn {
-            background: transparent;
-            border: 1px solid #e74c3c;
-            color: #e74c3c;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-        .delete-btn:hover { background: #e74c3c; color: #fff; }
-
-        .device-bar {
-            background: #0d1b2a;
-            border: 1px solid #1f4068;
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .device-bar-label { color: #888; font-size: 14px; }
-        .device-bar select {
-            padding: 8px 12px;
-            border: none;
-            border-radius: 6px;
-            background: #16213e;
-            color: #fff;
-            font-size: 14px;
-            min-width: 200px;
-            cursor: pointer;
-        }
-        .device-bar select:focus { outline: 2px solid #4a69bd; }
-        .device-bar button {
-            background: #333;
-            border: none;
-            color: #fff;
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .device-bar button:hover { background: #444; }
-        .device-bar .status {
-            margin-left: auto;
-            font-size: 13px;
-        }
-        .device-bar .status.connected { color: #2ecc71; }
-        .device-bar .status.disconnected { color: #e74c3c; }
-
-        /* 運行控制區 */
-        .runner-panel {
-            background: #16213e;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .runner-status {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        .status-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #666;
-        }
-        .status-dot.running { background: #2ecc71; animation: pulse 1s infinite; }
-        .status-dot.stopped { background: #666; }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        .runner-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
-        .device-select {
-            padding: 10px 12px;
-            border: none;
-            border-radius: 8px;
-            background: #0f1729;
-            color: #fff;
-            font-size: 14px;
-            min-width: 180px;
-            cursor: pointer;
-        }
-        .device-select:focus { outline: 2px solid #4a69bd; }
-        .btn-refresh {
-            background: #333;
-            color: #fff;
-            padding: 10px 12px;
-            font-size: 16px;
-        }
-        .btn-refresh:hover { background: #444; }
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.2s;
-        }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-start { background: #2ecc71; color: #fff; }
-        .btn-start:hover:not(:disabled) { background: #27ae60; }
-        .btn-stop { background: #e74c3c; color: #fff; }
-        .btn-stop:hover:not(:disabled) { background: #c0392b; }
-        .log-area {
-            background: #0f1729;
-            border-radius: 8px;
-            padding: 15px;
-            height: 150px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 13px;
-        }
-        .log-line { margin-bottom: 4px; }
-        .log-time { color: #666; }
-
-        /* 狀態列表 */
-        .section-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 15px;
-        }
-        .section-header h2 { font-size: 18px; }
-        .btn-add {
-            background: #4a69bd;
-            color: #fff;
-            text-decoration: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        .btn-add:hover { background: #3c5aa6; }
-        .state-list { list-style: none; }
-        .state-item {
-            background: #16213e;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            cursor: grab;
-        }
-        .state-item:active { cursor: grabbing; }
-        .state-item.dragging { opacity: 0.5; }
-        .state-item.drag-over { border: 2px dashed #4a69bd; }
-        .drag-handle { color: #666; cursor: grab; }
-        .state-toggle {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            border: 2px solid #2ecc71;
-            background: transparent;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #2ecc71;
-            font-size: 14px;
-        }
-        .state-toggle.disabled { border-color: #666; color: #666; }
-        .state-info { flex: 1; }
-        .state-name { font-weight: 500; margin-bottom: 4px; }
-        .state-detail { font-size: 13px; color: #888; }
-        .state-actions { display: flex; gap: 8px; }
-        .btn-small {
-            padding: 6px 12px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            background: #333;
-            color: #fff;
-        }
-        .btn-small:hover { background: #444; }
-        .btn-small.danger { background: #c0392b; }
-        .btn-small.danger:hover { background: #e74c3c; }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7);
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-        }
-        .modal.show { display: flex; }
-        .modal-content {
-            background: #16213e;
-            padding: 30px;
-            border-radius: 12px;
-            min-width: 300px;
-        }
-        .modal h2 { margin-bottom: 20px; }
-        .modal input {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            background: #0f1729;
-            color: #fff;
-            font-size: 16px;
-            margin-bottom: 15px;
-        }
-        .modal input:focus { outline: 2px solid #4a69bd; }
-        .modal-buttons { display: flex; gap: 10px; }
-        .btn-primary { background: #4a69bd; color: #fff; }
-        .btn-primary:hover { background: #3c5aa6; }
-        .btn-secondary { background: #333; color: #fff; }
-        .btn-secondary:hover { background: #444; }
+        .rename-btn:hover { background: var(--accent); color: #fff; }
+        h1 { display: flex; align-items: center; gap: 10px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="device-bar">
+    <div class="container" x-data="profilePage()">
+        <!-- 設備選擇欄 -->
+        <div class="device-bar" x-data="deviceBar()" x-init="init()" x-ref="deviceBar">
             <span class="device-bar-label">控制設備：</span>
-            <select id="globalDevice" onchange="saveDevice()">
-                <option value="">載入中...</option>
+            <select x-model="selected" @change="save()" :disabled="loading || $store.runner.status === 'running'">
+                <template x-if="loading">
+                    <option value="">掃描中...</option>
+                </template>
+                <template x-if="!loading && devices.length === 0">
+                    <option value="">未偵測到設備</option>
+                </template>
+                <template x-for="d in devices" :key="d.id">
+                    <option :value="d.id" x-text="d.name"></option>
+                </template>
             </select>
-            <button onclick="refreshDevices()">重新整理</button>
-            <span class="status" id="deviceStatus"></span>
+            <button @click="refresh()">重新整理</button>
+            <span class="status" :class="statusClass" x-text="status"></span>
         </div>
 
         <div class="header">
             <a href="/" class="back">&larr;</a>
-            <h1>
-                <span id="profileTitle">{{ name }}</span>
-                <button class="rename-btn" onclick="showRenameModal()">改名</button>
+            <h1 class="flex-1">
+                <span>{{ name }}</span>
+                <button class="rename-btn" @click="renameModal.open()">改名</button>
             </h1>
-            <button class="delete-btn" onclick="deleteProfile()">刪除腳本</button>
+            <button class="btn btn-outline-danger" @click="deleteProfile()">刪除腳本</button>
         </div>
 
         <!-- 運行控制 -->
-        <div class="runner-panel">
-            <div class="runner-status">
-                <div class="status-dot" id="statusDot"></div>
-                <span id="statusText">已停止</span>
+        <div class="panel mb-4">
+            <div class="flex items-center gap-4 mb-3">
+                <div class="status-dot" :class="runner.status"></div>
+                <span x-text="runner.status === 'running' ? '運行中' : '已停止'"></span>
             </div>
-            <div class="runner-row">
-                <button class="btn btn-start" id="btnStart" onclick="startRunner()">啟動</button>
-                <button class="btn btn-stop" id="btnStop" onclick="stopRunner()" disabled>停止</button>
+            <div class="flex gap-3 mb-3">
+                <button class="btn btn-success" @click="startRunner()" :disabled="runner.status === 'running'">啟動</button>
+                <button class="btn btn-danger" @click="stopRunner()" :disabled="runner.status !== 'running'">停止</button>
             </div>
-            <div class="log-area" id="logArea"></div>
+            <div class="log-area" x-ref="logArea">
+                <template x-for="log in runner.logs" :key="log.time + log.msg">
+                    <div class="log-line">
+                        <span class="log-time" x-text="log.time"></span>
+                        <span x-text="log.msg"></span>
+                    </div>
+                </template>
+            </div>
         </div>
 
         <!-- 狀態列表 -->
         <div class="section-header">
             <h2>步驟（執行順序）</h2>
-            <a href="/profile/{{ name }}/add" class="btn-add">+ 新增步驟</a>
+            <a href="/profile/{{ name }}/add" class="btn btn-primary">+ 新增步驟</a>
         </div>
 
-        <ul class="state-list" id="stateList">
+        <ul class="list" id="stateList" @dragover.prevent @drop="handleDrop($event)">
             {% if states %}
                 {% for state_name, config in states.items() %}
-                <li class="state-item" draggable="true" data-name="{{ state_name }}">
+                <li class="list-item draggable"
+                    draggable="true"
+                    data-name="{{ state_name }}"
+                    @dragstart="handleDragStart($event, '{{ state_name }}')"
+                    @dragend="handleDragEnd($event)"
+                    @dragover="handleDragOver($event)">
                     <span class="drag-handle">☰</span>
-                    <button class="state-toggle {{ 'disabled' if not config.get('enabled', true) }}"
-                            onclick="toggleState('{{ state_name }}')">
+                    <button class="toggle-btn {{ 'disabled' if not config.get('enabled', true) }}"
+                            @click="toggleState('{{ state_name }}')">
                         {{ '✓' if config.get('enabled', true) else '' }}
                     </button>
-                    <div class="state-info">
-                        <div class="state-name">{{ state_name }}</div>
-                        <div class="state-detail">點擊 {{ config.get('click', []) }}</div>
+                    <div class="flex-1">
+                        <div class="mb-2"><strong>{{ state_name }}</strong></div>
+                        <div class="text-muted text-sm">點擊 {{ config.get('click', []) }}</div>
                     </div>
-                    <div class="state-actions">
-                        <a href="/profile/{{ name }}/edit/{{ state_name }}" class="btn-small">編輯</a>
-                        <button class="btn-small {{ 'danger' if config.get('enabled', true) else '' }}"
-                                onclick="toggleState('{{ state_name }}')">
+                    <div class="flex gap-2">
+                        <a href="/profile/{{ name }}/edit/{{ state_name }}" class="btn btn-secondary btn-small">編輯</a>
+                        <button class="btn btn-secondary btn-small"
+                                @click="toggleState('{{ state_name }}')">
                             {{ '停用' if config.get('enabled', true) else '啟用' }}
                         </button>
-                        <button class="btn-small danger" onclick="deleteState('{{ state_name }}')">刪除</button>
+                        <button class="btn btn-danger btn-small" @click="deleteState('{{ state_name }}')">刪除</button>
                     </div>
                 </li>
                 {% endfor %}
@@ -321,251 +109,172 @@
                 <li class="empty-state">尚無步驟，點擊「+ 新增」開始</li>
             {% endif %}
         </ul>
-    </div>
 
-    <div class="modal" id="renameModal">
-        <div class="modal-content">
-            <h2>重新命名腳本</h2>
-            <input type="text" id="renameName" placeholder="新名稱">
-            <div class="modal-buttons">
-                <button class="btn btn-secondary" onclick="hideRenameModal()">取消</button>
-                <button class="btn btn-primary" onclick="renameProfile()">確定</button>
+        <!-- 改名 Modal -->
+        <div class="modal" :class="{ show: renameModal.show }" @click="renameModal.backdropClick($event)">
+            <div class="modal-content">
+                <h2>重新命名腳本</h2>
+                <input type="text" x-model="renameModal.newName" placeholder="新名稱"
+                       @keyup.enter="renameProfile()">
+                <div class="modal-buttons">
+                    <button class="btn btn-secondary" @click="renameModal.close()">取消</button>
+                    <button class="btn btn-primary" @click="renameProfile()">確定</button>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        const profileName = "{{ name }}";
+        // Alpine Store for runner status
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('runner', { status: 'stopped' });
+        });
 
-        // ========== 設備管理 ==========
-        async function refreshDevices() {
-            const select = document.getElementById('globalDevice');
-            const status = document.getElementById('deviceStatus');
-            select.innerHTML = '<option value="">掃描中...</option>';
-            status.textContent = '';
-            status.className = 'status';
+        function profilePage() {
+            const profileName = "{{ name }}";
 
-            try {
-                const res = await fetch('/api/devices');
-                const data = await res.json();
-                const devices = data.devices || [];
+            return {
+                profileName,
+                runner: {
+                    status: 'stopped',
+                    logs: []
+                },
+                dragItem: null,
+                renameModal: {
+                    show: false,
+                    newName: profileName,
+                    open() { this.show = true; this.newName = profileName; },
+                    close() { this.show = false; },
+                    backdropClick(e) { if (e.target === e.currentTarget) this.close(); }
+                },
 
-                if (devices.length === 0) {
-                    select.innerHTML = '<option value="">未偵測到設備</option>';
-                    status.textContent = '請開啟模擬器';
-                    status.className = 'status disconnected';
-                } else {
-                    select.innerHTML = devices.map(d =>
-                        `<option value="${d.id}">${d.name}</option>`
-                    ).join('');
+                init() {
+                    this.initSSE();
+                },
 
-                    // 恢復上次選擇
-                    const saved = localStorage.getItem('selectedDevice');
-                    if (saved && devices.some(d => d.id === saved)) {
-                        select.value = saved;
+                initSSE() {
+                    const eventSource = new EventSource('/api/runner/stream');
+                    eventSource.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        this.runner.status = data.status;
+                        Alpine.store('runner').status = data.status;
+                        if (data.logs.length > 0) {
+                            this.runner.logs.push(...data.logs);
+                            this.$nextTick(() => {
+                                const area = this.$refs.logArea;
+                                if (area) area.scrollTop = area.scrollHeight;
+                            });
+                        }
+                    };
+                    eventSource.onerror = () => {
+                        console.log('SSE connection lost, reconnecting...');
+                    };
+                },
+
+                async startRunner() {
+                    const device = getSelectedDevice();
+                    if (!device) {
+                        alert('請先選擇設備');
+                        return;
                     }
-                    saveDevice();
-                    status.textContent = '已連線';
-                    status.className = 'status connected';
+
+                    const res = await fetch(`/api/runner/start/${encodeURIComponent(profileName)}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ device })
+                    });
+                    const data = await res.json();
+                    if (!data.success) alert(data.message);
+                },
+
+                async stopRunner() {
+                    await fetch('/api/runner/stop', { method: 'POST' });
+                },
+
+                async toggleState(stateName) {
+                    const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/state/${encodeURIComponent(stateName)}/toggle`, {
+                        method: 'POST'
+                    });
+                    if (res.ok) location.reload();
+                },
+
+                async deleteState(stateName) {
+                    if (!confirm(`確定刪除「${stateName}」？`)) return;
+
+                    const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/state/${encodeURIComponent(stateName)}`, {
+                        method: 'DELETE'
+                    });
+                    if (res.ok) location.reload();
+                },
+
+                async deleteProfile() {
+                    if (!confirm(`確定刪除腳本「${profileName}」？\n所有步驟和截圖都會被刪除。`)) return;
+
+                    const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}`, {
+                        method: 'DELETE'
+                    });
+                    if (res.ok) window.location.href = '/';
+                },
+
+                async renameProfile() {
+                    const newName = this.renameModal.newName.trim();
+                    if (!newName) return;
+
+                    const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/rename`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: newName })
+                    });
+
+                    if (res.ok) {
+                        window.location.href = '/profile/' + encodeURIComponent(newName);
+                    } else {
+                        const data = await res.json();
+                        alert(data.error || '改名失敗');
+                    }
+                },
+
+                // 拖拽排序
+                handleDragStart(e, name) {
+                    this.dragItem = e.target;
+                    e.target.classList.add('dragging');
+                },
+
+                handleDragEnd(e) {
+                    e.target.classList.remove('dragging');
+                    this.dragItem = null;
+                    this.saveOrder();
+                },
+
+                handleDragOver(e) {
+                    const item = e.target.closest('.list-item');
+                    if (item && item !== this.dragItem) {
+                        const rect = item.getBoundingClientRect();
+                        const mid = rect.top + rect.height / 2;
+                        if (e.clientY < mid) {
+                            item.parentNode.insertBefore(this.dragItem, item);
+                        } else {
+                            item.parentNode.insertBefore(this.dragItem, item.nextSibling);
+                        }
+                    }
+                },
+
+                handleDrop(e) {
+                    // Drop handled by dragend
+                },
+
+                async saveOrder() {
+                    const items = document.querySelectorAll('#stateList .list-item[data-name]');
+                    const order = Array.from(items).map(item => item.dataset.name);
+
+                    await fetch(`/api/profile/${encodeURIComponent(profileName)}/reorder`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ order })
+                    });
                 }
-            } catch (e) {
-                select.innerHTML = '<option value="">載入失敗</option>';
-                status.textContent = '連線錯誤';
-                status.className = 'status disconnected';
-            }
+            };
         }
-
-        function saveDevice() {
-            const device = document.getElementById('globalDevice').value;
-            if (device) {
-                localStorage.setItem('selectedDevice', device);
-            }
-        }
-
-        function getSelectedDevice() {
-            return localStorage.getItem('selectedDevice') || '';
-        }
-
-        // 頁面載入時刷新設備
-        refreshDevices();
-
-        // ========== 運行控制 ==========
-        async function startRunner() {
-            const device = getSelectedDevice();
-            if (!device) {
-                alert('請先選擇設備');
-                return;
-            }
-
-            const res = await fetch(`/api/runner/start/${encodeURIComponent(profileName)}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ device })
-            });
-            const data = await res.json();
-            if (!data.success) alert(data.message);
-        }
-
-        async function stopRunner() {
-            await fetch('/api/runner/stop', { method: 'POST' });
-        }
-
-        function updateRunnerUI(status) {
-            const dot = document.getElementById('statusDot');
-            const text = document.getElementById('statusText');
-            const btnStart = document.getElementById('btnStart');
-            const btnStop = document.getElementById('btnStop');
-            const globalDevice = document.getElementById('globalDevice');
-
-            dot.className = 'status-dot ' + status;
-
-            if (status === 'running') {
-                text.textContent = '運行中';
-                btnStart.disabled = true;
-                btnStop.disabled = false;
-                globalDevice.disabled = true;
-            } else {
-                text.textContent = '已停止';
-                btnStart.disabled = false;
-                btnStop.disabled = true;
-                globalDevice.disabled = false;
-            }
-        }
-
-        function updateLogs(logs) {
-            const area = document.getElementById('logArea');
-            logs.forEach(log => {
-                const line = document.createElement('div');
-                line.className = 'log-line';
-                line.innerHTML = `<span class="log-time">${log.time}</span> ${log.msg}`;
-                area.appendChild(line);
-            });
-            area.scrollTop = area.scrollHeight;
-        }
-
-        // SSE 串流
-        const eventSource = new EventSource('/api/runner/stream');
-        eventSource.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            updateRunnerUI(data.status);
-            if (data.logs.length > 0) {
-                updateLogs(data.logs);
-            }
-        };
-        eventSource.onerror = () => {
-            console.log('SSE connection lost, reconnecting...');
-        };
-
-        // ========== 狀態管理 ==========
-        async function toggleState(stateName) {
-            const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/state/${encodeURIComponent(stateName)}/toggle`, {
-                method: 'POST'
-            });
-            if (res.ok) location.reload();
-        }
-
-        async function deleteState(stateName) {
-            if (!confirm(`確定刪除「${stateName}」？`)) return;
-
-            const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/state/${encodeURIComponent(stateName)}`, {
-                method: 'DELETE'
-            });
-            if (res.ok) location.reload();
-        }
-
-        async function deleteProfile() {
-            if (!confirm(`確定刪除腳本「${profileName}」？\n所有步驟和截圖都會被刪除。`)) return;
-
-            const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}`, {
-                method: 'DELETE'
-            });
-            if (res.ok) window.location.href = '/';
-        }
-
-        // ========== 改名 ==========
-        function showRenameModal() {
-            document.getElementById('renameName').value = profileName;
-            document.getElementById('renameModal').classList.add('show');
-            document.getElementById('renameName').focus();
-            document.getElementById('renameName').select();
-        }
-
-        function hideRenameModal() {
-            document.getElementById('renameModal').classList.remove('show');
-        }
-
-        async function renameProfile() {
-            const newName = document.getElementById('renameName').value.trim();
-            if (!newName) return;
-
-            const res = await fetch(`/api/profile/${encodeURIComponent(profileName)}/rename`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newName })
-            });
-
-            if (res.ok) {
-                window.location.href = '/profile/' + encodeURIComponent(newName);
-            } else {
-                const data = await res.json();
-                alert(data.error || '改名失敗');
-            }
-        }
-
-        document.getElementById('renameName').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') renameProfile();
-        });
-
-        document.getElementById('renameModal').addEventListener('click', (e) => {
-            if (e.target.classList.contains('modal')) hideRenameModal();
-        });
-
-        // ========== 拖拽排序 ==========
-        const stateList = document.getElementById('stateList');
-        let dragItem = null;
-
-        stateList.addEventListener('dragstart', (e) => {
-            if (e.target.classList.contains('state-item')) {
-                dragItem = e.target;
-                e.target.classList.add('dragging');
-            }
-        });
-
-        stateList.addEventListener('dragend', (e) => {
-            if (e.target.classList.contains('state-item')) {
-                e.target.classList.remove('dragging');
-                dragItem = null;
-                saveOrder();
-            }
-        });
-
-        stateList.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            const item = e.target.closest('.state-item');
-            if (item && item !== dragItem) {
-                const rect = item.getBoundingClientRect();
-                const mid = rect.top + rect.height / 2;
-                if (e.clientY < mid) {
-                    item.parentNode.insertBefore(dragItem, item);
-                } else {
-                    item.parentNode.insertBefore(dragItem, item.nextSibling);
-                }
-            }
-        });
-
-        async function saveOrder() {
-            const items = stateList.querySelectorAll('.state-item[data-name]');
-            const order = Array.from(items).map(item => item.dataset.name);
-
-            await fetch(`/api/profile/${encodeURIComponent(profileName)}/reorder`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ order })
-            });
-        }
-
-        // 心跳（用於自動關閉檢測）
-        setInterval(() => fetch('/api/heartbeat', { method: 'POST' }), 2000);
     </script>
 </body>
 </html>
