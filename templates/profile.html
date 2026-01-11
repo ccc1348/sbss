@@ -20,6 +20,32 @@
         }
         .rename-btn:hover { background: var(--accent); color: #fff; }
         h1 { display: flex; align-items: center; gap: 10px; }
+        /* 順序模式 */
+        .mode-toggle { display: flex; align-items: center; gap: 8px; }
+        .mode-toggle label { font-size: 14px; color: var(--text-secondary); cursor: pointer; }
+        .switch { position: relative; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .switch .slider {
+            position: absolute; cursor: pointer; inset: 0;
+            background: #444; border-radius: 24px; transition: 0.2s;
+        }
+        .switch .slider:before {
+            content: ""; position: absolute; height: 18px; width: 18px;
+            left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.2s;
+        }
+        .switch input:checked + .slider { background: var(--accent); }
+        .switch input:checked + .slider:before { transform: translateX(20px); }
+        /* 當前步驟高亮 */
+        .list-item.current-step { border-left: 3px solid var(--success); background: rgba(46, 204, 113, 0.1); }
+        .list-item.pending-step { opacity: 0.5; }
+        .step-index { font-size: 12px; color: var(--text-muted); margin-right: 8px; min-width: 24px; }
+        .step-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-left: 8px; }
+        .step-badge.skippable { background: #f39c12; color: #000; }
+        .step-badge.repeatable { background: #9b59b6; color: #fff; }
+        .step-badge.current { background: var(--success); color: #fff; }
+        .skippable-btn, .repeatable-btn { font-size: 11px; padding: 2px 8px; }
+        .skippable-btn.active { background: #f39c12; color: #000; }
+        .repeatable-btn.active { background: #9b59b6; color: #fff; }
     </style>
 </head>
 <body>
@@ -56,10 +82,20 @@
             <div class="flex items-center gap-4 mb-3">
                 <div class="status-dot" :class="runner.status"></div>
                 <span x-text="runner.status === 'running' ? '運行中' : '已停止'"></span>
+                <template x-if="runner.status === 'running' && runner.sequentialMode">
+                    <span class="text-muted text-sm" x-text="runner.currentStepName ? `目前: ${runner.currentStepName}` : '等待開始...'"></span>
+                </template>
             </div>
-            <div class="flex gap-3 mb-3">
+            <div class="flex items-center gap-4 mb-3">
                 <button class="btn btn-success" @click="startRunner()" :disabled="runner.status === 'running'">啟動</button>
                 <button class="btn btn-danger" @click="stopRunner()" :disabled="runner.status !== 'running'">停止</button>
+                <div class="mode-toggle" style="margin-left: auto;">
+                    <label class="switch">
+                        <input type="checkbox" :checked="sequentialMode" @change="toggleSequentialMode()" :disabled="runner.status === 'running'">
+                        <span class="slider"></span>
+                    </label>
+                    <label @click="if(runner.status !== 'running') toggleSequentialMode()">順序模式</label>
+                </div>
             </div>
             <div class="log-area" x-ref="logArea">
                 <template x-for="log in runner.logs" :key="log.time + log.msg">
@@ -83,19 +119,41 @@
                 <li class="list-item draggable"
                     draggable="true"
                     data-name="{{ state_name }}"
+                    data-index="{{ loop.index0 }}"
+                    :class="getStepClass('{{ state_name }}', {{ loop.index0 }})"
                     @dragstart="handleDragStart($event, '{{ state_name }}')"
                     @dragend="handleDragEnd($event)"
                     @dragover="handleDragOver($event)">
+                    <span class="step-index" x-show="sequentialMode">{{ loop.index }}</span>
                     <span class="drag-handle">☰</span>
                     <button class="toggle-btn {{ 'disabled' if not config.get('enabled', true) }}"
                             @click="toggleState('{{ state_name }}')">
                         {{ '✓' if config.get('enabled', true) else '' }}
                     </button>
                     <div class="flex-1">
-                        <div class="mb-2"><strong>{{ state_name }}</strong></div>
+                        <div class="mb-2">
+                            <strong>{{ state_name }}</strong>
+                            <span class="step-badge current" x-show="runner.status === 'running' && runner.sequentialMode && runner.currentStepName === '{{ state_name }}'">已執行</span>
+                            <span class="step-badge skippable" x-show="sequentialMode && stateSkippable['{{ state_name }}']">可略過</span>
+                            <span class="step-badge repeatable" x-show="sequentialMode && stateRepeatable['{{ state_name }}']">可重複</span>
+                        </div>
                         <div class="text-muted text-sm">點擊 {{ config.get('click', []) }}</div>
                     </div>
                     <div class="flex gap-2">
+                        <button class="btn btn-secondary btn-small skippable-btn"
+                                :class="{ active: stateSkippable['{{ state_name }}'] }"
+                                x-show="sequentialMode"
+                                @click="toggleSkippable('{{ state_name }}')"
+                                :title="stateSkippable['{{ state_name }}'] ? '點擊設為必要步驟' : '點擊設為可略過'">
+                            <span x-text="stateSkippable['{{ state_name }}'] ? '可略過' : '必要'"></span>
+                        </button>
+                        <button class="btn btn-secondary btn-small repeatable-btn"
+                                :class="{ active: stateRepeatable['{{ state_name }}'] }"
+                                x-show="sequentialMode"
+                                @click="toggleRepeatable('{{ state_name }}')"
+                                :title="stateRepeatable['{{ state_name }}'] ? '點擊設為單次執行' : '點擊設為可重複'">
+                            <span x-text="stateRepeatable['{{ state_name }}'] ? '可重複' : '單次'"></span>
+                        </button>
                         <a href="/profile/{{ name }}/edit/{{ state_name }}" class="btn btn-secondary btn-small">編輯</a>
                         <button class="btn btn-secondary btn-small"
                                 @click="toggleState('{{ state_name }}')">
@@ -133,11 +191,32 @@
         function profilePage() {
             const profileName = "{{ name }}";
 
+            // 初始化各步驟的 skippable 狀態
+            const initialSkippable = {
+                {% for state_name, config in states.items() %}
+                "{{ state_name }}": {{ 'true' if config.get('skippable', false) else 'false' }},
+                {% endfor %}
+            };
+
+            // 初始化各步驟的 repeatable 狀態
+            const initialRepeatable = {
+                {% for state_name, config in states.items() %}
+                "{{ state_name }}": {{ 'true' if config.get('repeatable', false) else 'false' }},
+                {% endfor %}
+            };
+
             return {
                 profileName,
+                sequentialMode: {{ 'true' if sequential_mode else 'false' }},
+                stateSkippable: initialSkippable,
+                stateRepeatable: initialRepeatable,
                 runner: {
                     status: 'stopped',
-                    logs: []
+                    logs: [],
+                    sequentialMode: false,
+                    currentStepIndex: -1,
+                    currentStepName: null,
+                    stepNames: []
                 },
                 dragItem: null,
                 renameModal: {
@@ -157,6 +236,10 @@
                     eventSource.onmessage = (event) => {
                         const data = JSON.parse(event.data);
                         this.runner.status = data.status;
+                        this.runner.sequentialMode = data.sequential_mode;
+                        this.runner.currentStepIndex = data.current_step_index;
+                        this.runner.currentStepName = data.current_step_name;
+                        this.runner.stepNames = data.step_names || [];
                         Alpine.store('runner').status = data.status;
                         if (data.logs.length > 0) {
                             this.runner.logs.push(...data.logs);
@@ -169,6 +252,46 @@
                     eventSource.onerror = () => {
                         console.log('SSE connection lost, reconnecting...');
                     };
+                },
+
+                async toggleSequentialMode() {
+                    if (this.runner.status === 'running') return;
+                    this.sequentialMode = !this.sequentialMode;
+                    await fetch(`/api/profile/${encodeURIComponent(profileName)}/sequential`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled: this.sequentialMode })
+                    });
+                },
+
+                async toggleSkippable(stateName) {
+                    const newValue = !this.stateSkippable[stateName];
+                    this.stateSkippable[stateName] = newValue;
+                    await fetch(`/api/profile/${encodeURIComponent(profileName)}/state/${encodeURIComponent(stateName)}/skippable`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ skippable: newValue })
+                    });
+                },
+
+                async toggleRepeatable(stateName) {
+                    const newValue = !this.stateRepeatable[stateName];
+                    this.stateRepeatable[stateName] = newValue;
+                    await fetch(`/api/profile/${encodeURIComponent(profileName)}/state/${encodeURIComponent(stateName)}/repeatable`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ repeatable: newValue })
+                    });
+                },
+
+                getStepClass(stateName, index) {
+                    if (this.runner.status !== 'running' || !this.runner.sequentialMode) return '';
+                    if (this.runner.currentStepName === stateName) return 'current-step';
+                    // 已完成的步驟變淡（使用 stepNames 中的位置比較）
+                    const stepIdx = this.runner.stepNames.indexOf(stateName);
+                    const currentIdx = this.runner.currentStepIndex;
+                    if (stepIdx >= 0 && currentIdx >= 0 && stepIdx < currentIdx) return 'pending-step';
+                    return '';
                 },
 
                 async startRunner() {
