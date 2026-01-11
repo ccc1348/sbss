@@ -462,12 +462,56 @@ def api_save_state(name):
         if old_template.exists():
             shutil.copy(old_template, template_path)
 
-    # 如果是重命名，刪除舊狀態
-    if old_name and old_name != state_name:
-        core.remove_state(name, old_name)
-
     # 儲存設定
-    core.add_state(name, state_name, click, regions)
+    config = core.get_profile_config(name)
+    if "states" not in config:
+        config["states"] = {}
+
+    is_new = not old_name
+    is_rename = old_name and old_name != state_name
+
+    # 建立新的 state 設定
+    new_state_config = {"click": click}
+    if len(regions) == 1:
+        new_state_config["region"] = regions[0]
+    else:
+        new_state_config["regions"] = regions
+
+    if is_new:
+        # 新增：放在最上方，預設 disabled
+        new_state_config["enabled"] = False
+        new_states = {state_name: new_state_config}
+        new_states.update(config["states"])
+        config["states"] = new_states
+    elif is_rename:
+        # 重命名：保持原位置，保留其他屬性
+        old_config = config["states"].get(old_name, {})
+        new_state_config["enabled"] = old_config.get("enabled", True)
+        new_state_config["skippable"] = old_config.get("skippable", False)
+        new_state_config["repeatable"] = old_config.get("repeatable", False)
+
+        # 重建 states 保持順序
+        new_states = {}
+        for k, v in config["states"].items():
+            if k == old_name:
+                new_states[state_name] = new_state_config
+            else:
+                new_states[k] = v
+        config["states"] = new_states
+
+        # 刪除舊模板
+        old_template = core.get_template_path(old_name, name)
+        if old_template.exists() and old_name != state_name:
+            old_template.unlink()
+    else:
+        # 編輯（同名）：保留既有屬性，只更新 click 和 regions
+        old_config = config["states"].get(state_name, {})
+        new_state_config["enabled"] = old_config.get("enabled", True)
+        new_state_config["skippable"] = old_config.get("skippable", False)
+        new_state_config["repeatable"] = old_config.get("repeatable", False)
+        config["states"][state_name] = new_state_config
+
+    core.save_profile_config(name, config)
 
     return jsonify({"success": True})
 
