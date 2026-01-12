@@ -55,6 +55,16 @@ jobs:
           '@ | Set-Content -Path "run.bat" -Encoding ASCII
         shell: pwsh
 
+      - name: Create debug.bat
+        run: |
+          @'
+          @echo off
+          cd /d "%~dp0"
+          python\python.exe web.py
+          pause
+          '@ | Set-Content -Path "debug.bat" -Encoding ASCII
+        shell: pwsh
+
       - name: Prepare release folder
         run: |
           mkdir release
@@ -65,6 +75,7 @@ jobs:
           cp *.py release/
           cp requirements.txt release/
           cp run.bat release/
+          cp debug.bat release/
         shell: bash
 
       - name: Zip release
