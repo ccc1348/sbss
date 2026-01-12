@@ -45,16 +45,23 @@ jobs:
           pyinstaller --name "sbss" `
             --add-data "templates;templates" `
             --add-data "static;static" `
-            --add-data "shared;shared" `
-            --add-data "profiles;profiles" `
-            --add-data "platform-tools;platform-tools" `
+            --onefile `
             --noconsole `
             --noconfirm `
             web.py
         shell: pwsh
 
+      - name: Prepare release folder
+        run: |
+          mkdir release
+          cp dist/sbss.exe release/
+          cp -r shared release/
+          cp -r profiles release/
+          cp -r platform-tools release/
+        shell: bash
+
       - name: Zip release
-        run: Compress-Archive -Path dist/sbss/* -DestinationPath sbss-windows.zip
+        run: Compress-Archive -Path release/* -DestinationPath sbss-windows.zip
         shell: pwsh
 
       - name: Create Release
