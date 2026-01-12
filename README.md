@@ -27,7 +27,7 @@ flowchart TD
 
 1. **開啟模擬器**（BlueStacks、LDPlayer、夜神等），進入遊戲
 2. **啟用 ADB**：模擬器設定中開啟 Android Debug Bridge
-3. **執行 sbss**，自動開啟瀏覽器
+3. **執行 sbss**，自動開啟操作視窗（關閉視窗會自動停止運行）
 
 ## 使用流程
 

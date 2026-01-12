@@ -15,41 +15,6 @@ import os
 BASE_DIR = Path(__file__).parent
 app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
 
-# ============ 自動關閉管理 ============
-
-class ShutdownManager:
-    """管理自動關閉 - 使用心跳檢測"""
-    def __init__(self, timeout=5):
-        self.timeout = timeout
-        self.last_heartbeat = None
-        self.lock = threading.Lock()
-        self.checker_thread = None
-
-    def heartbeat(self):
-        with self.lock:
-            first_beat = self.last_heartbeat is None
-            self.last_heartbeat = time.time()
-
-        # 第一次心跳時啟動檢查線程
-        if first_beat:
-            self.checker_thread = threading.Thread(target=self._checker, daemon=True)
-            self.checker_thread.start()
-
-    def _checker(self):
-        """定期檢查心跳是否超時"""
-        while True:
-            time.sleep(1)
-            with self.lock:
-                if self.last_heartbeat is None:
-                    continue
-                elapsed = time.time() - self.last_heartbeat
-                if elapsed > self.timeout:
-                    print(f"\n心跳超時 ({elapsed:.1f}s)，自動關閉服務...")
-                    os._exit(0)
-
-
-shutdown_manager = ShutdownManager(timeout=15)
-
 # ============ 運行管理 ============
 
 class Runner:
@@ -61,6 +26,7 @@ class Runner:
         self.device = None
         self.logs = []
         self.max_logs = 100
+        self.log_id_counter = 0  # 日誌 ID 計數器
         self.lock = threading.Lock()
         # 順序模式狀態
         self.sequential_mode = False
@@ -70,18 +36,26 @@ class Runner:
 
     def log(self, msg):
         with self.lock:
+            self.log_id_counter += 1
             timestamp = time.strftime("%H:%M:%S")
-            self.logs.append({"time": timestamp, "msg": msg})
+            self.logs.append({"id": self.log_id_counter, "time": timestamp, "msg": msg})
             if len(self.logs) > self.max_logs:
                 self.logs.pop(0)
 
-    def get_logs(self, since=0):
+    def get_logs_since(self, since_id=0):
+        """取得 ID 大於 since_id 的所有日誌"""
         with self.lock:
-            return self.logs[since:]
+            return [log for log in self.logs if log["id"] > since_id]
+
+    def get_latest_log_id(self):
+        """取得最新的日誌 ID"""
+        with self.lock:
+            return self.log_id_counter
 
     def clear_logs(self):
         with self.lock:
             self.logs = []
+            self.log_id_counter = 0
 
     def start(self, profile_name, device=None):
         if self.status == "running":
@@ -735,38 +709,35 @@ def api_runner_status():
     })
 
 
-@app.route("/api/heartbeat", methods=["POST"])
-def api_heartbeat():
-    """心跳 - 用於追蹤頁面連線狀態"""
-    shutdown_manager.heartbeat()
-    return "", 204
-
-
 @app.route("/api/runner/stream")
 def api_runner_stream():
     """SSE 串流運行狀態"""
     import json
 
+    # 從查詢參數取得客戶端已有的最後日誌 ID（用於重連）
+    last_log_id = request.args.get('since', 0, type=int)
+
     def generate():
-        last_log_count = 0
+        nonlocal last_log_id
         last_status = None
         last_step_index = None
 
         while True:
             status = runner.status
-            log_count = len(runner.logs)
+            current_log_id = runner.get_latest_log_id()
             step_index = runner.current_step_index
 
             # 偵測 log 被清空（重新啟動時）
-            if log_count < last_log_count:
-                last_log_count = 0
+            if current_log_id < last_log_id:
+                last_log_id = 0
 
             # 只在有變化時發送
-            if status != last_status or log_count != last_log_count or step_index != last_step_index:
+            if status != last_status or current_log_id != last_log_id or step_index != last_step_index:
+                new_logs = runner.get_logs_since(last_log_id)
                 data = {
                     "status": status,
-                    "logs": runner.get_logs(last_log_count),
-                    "log_count": log_count,
+                    "logs": new_logs,
+                    "last_log_id": current_log_id,
                     "sequential_mode": runner.sequential_mode,
                     "current_step_index": runner.current_step_index,
                     "current_step_name": runner.current_step_name,
@@ -774,7 +745,7 @@ def api_runner_stream():
                 }
                 yield f"data: {json.dumps(data)}\n\n"
                 last_status = status
-                last_log_count = log_count
+                last_log_id = current_log_id
                 last_step_index = step_index
 
             time.sleep(0.5)
@@ -798,17 +769,47 @@ def find_free_port(start_port=8080, max_attempts=10):
     raise RuntimeError(f"找不到可用端口 ({start_port}-{start_port + max_attempts - 1})")
 
 
+def on_closing():
+    """視窗關閉時停止運行中的任務"""
+    if runner.status == "running":
+        runner.stop()
+
+
+def wait_for_server(url, timeout=10):
+    """等待伺服器就緒"""
+    import urllib.request
+    import urllib.error
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            urllib.request.urlopen(url, timeout=1)
+            return True
+        except (urllib.error.URLError, ConnectionRefusedError):
+            time.sleep(0.1)
+    return False
+
+
 if __name__ == "__main__":
-    import webbrowser
-    import os
+    import webview
 
     port = find_free_port(8080)
+    url = f"http://127.0.0.1:{port}"
 
     print("啟動 Web 界面...")
-    print(f"http://127.0.0.1:{port}")
+    print(url)
 
-    # 只在主進程開啟瀏覽器（避免 reloader 重複開啟）
-    if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
-        webbrowser.open(f"http://127.0.0.1:{port}")
+    # 在背景線程運行 Flask
+    flask_thread = threading.Thread(
+        target=lambda: app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False),
+        daemon=True
+    )
+    flask_thread.start()
 
-    app.run(host="127.0.0.1", port=port, debug=False)
+    # 等待 Flask 就緒
+    if not wait_for_server(url):
+        print("伺服器啟動超時")
+        exit(1)
+
+    # 開啟 PyWebView 視窗
+    window = webview.create_window("sbss", url, width=1200, height=800)
+    webview.start(on_closing)

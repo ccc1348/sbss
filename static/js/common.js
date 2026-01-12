@@ -129,14 +129,6 @@ const api = {
     }
 };
 
-// ========== 心跳 ==========
-function startHeartbeat() {
-    setInterval(() => fetch('/api/heartbeat', { method: 'POST' }), 2000);
-}
-
-// 頁面載入時啟動心跳
-document.addEventListener('DOMContentLoaded', startHeartbeat);
-
 // ========== 工具函式 ==========
 function getSelectedDevice() {
     return localStorage.getItem('selectedDevice') || '';

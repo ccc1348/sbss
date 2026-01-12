@@ -44,6 +44,7 @@ jobs:
         run: |
           pyinstaller --name "sbss" `
             --add-data "templates;templates" `
+            --add-data "static;static" `
             --add-data "shared;shared" `
             --add-data "profiles;profiles" `
             --add-data "platform-tools;platform-tools" `

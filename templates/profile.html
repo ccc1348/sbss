@@ -213,6 +213,7 @@
                 runner: {
                     status: 'stopped',
                     logs: [],
+                    lastLogId: 0,
                     sequentialMode: false,
                     currentStepIndex: -1,
                     currentStepName: null,
@@ -232,7 +233,8 @@
                 },
 
                 initSSE() {
-                    const eventSource = new EventSource('/api/runner/stream');
+                    const url = `/api/runner/stream?since=${this.runner.lastLogId}`;
+                    const eventSource = new EventSource(url);
                     eventSource.onmessage = (event) => {
                         const data = JSON.parse(event.data);
                         this.runner.status = data.status;
@@ -241,8 +243,14 @@
                         this.runner.currentStepName = data.current_step_name;
                         this.runner.stepNames = data.step_names || [];
                         Alpine.store('runner').status = data.status;
+                        // 偵測日誌被清空（重新啟動）
+                        if (data.last_log_id < this.runner.lastLogId) {
+                            this.runner.logs = [];
+                            this.runner.lastLogId = 0;
+                        }
                         if (data.logs.length > 0) {
                             this.runner.logs.push(...data.logs);
+                            this.runner.lastLogId = data.last_log_id;
                             this.$nextTick(() => {
                                 const area = this.$refs.logArea;
                                 if (area) area.scrollTop = area.scrollHeight;
@@ -250,7 +258,8 @@
                         }
                     };
                     eventSource.onerror = () => {
-                        console.log('SSE connection lost, reconnecting...');
+                        eventSource.close();
+                        setTimeout(() => this.initSSE(), 2000);  // 2 秒後自動重連
                     };
                 },
 
