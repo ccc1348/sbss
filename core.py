@@ -710,6 +710,8 @@ def crop_region(img, region):
 
 def match_region(frame_region, template_region):
     """比對單一區域"""
+    if frame_region is None or template_region is None:
+        return 0
     if frame_region.shape[:2] != template_region.shape[:2]:
         template_resized = cv2.resize(template_region, (frame_region.shape[1], frame_region.shape[0]))
     else:
