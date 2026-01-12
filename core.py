@@ -125,21 +125,40 @@ def adb_log(msg):
 
 # ============ 設定載入 ============
 
-def load_json(path):
-    """載入 JSON 檔案"""
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+def load_json(path, default=None):
+    """載入 JSON 檔案，檔案不存在時返回預設值"""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return default if default is not None else {}
 
 
 def save_json(path, data):
     """儲存 JSON 檔案"""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+DEFAULT_SETTINGS = {
+    "match_threshold": 0.8,
+    "loop_interval": 0.5,
+    "long_interval": 5,
+    "miss_threshold": 5,
+    "start_delay": 2,
+    "click_delay": [0.2, 1.2],
+    "debug": False
+}
+
 def get_shared_settings():
-    """載入共用設定"""
-    return load_json(SHARED_DIR / "settings.json")
+    """載入共用設定，不存在時返回預設值"""
+    settings = load_json(SHARED_DIR / "settings.json", DEFAULT_SETTINGS.copy())
+    # 確保所有欄位都存在
+    for key, value in DEFAULT_SETTINGS.items():
+        if key not in settings:
+            settings[key] = value
+    return settings
 
 
 def get_profile_list():

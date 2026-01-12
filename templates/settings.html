@@ -60,20 +60,6 @@
             </div>
             <div class="hint" style="margin-top: -10px;">點擊後隨機等待範圍，避免行為太規律</div>
 
-            <div class="divider"></div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>解析度 寬</label>
-                    <input type="number" x-model="settings.resolution_w" step="1">
-                </div>
-                <div class="form-group">
-                    <label>解析度 高</label>
-                    <input type="number" x-model="settings.resolution_h" step="1">
-                </div>
-            </div>
-            <div class="hint" style="margin-top: -10px;">BlueStacks 的解析度設定</div>
-
             <div class="flex items-center gap-4" style="margin-top: 25px;">
                 <button class="btn btn-primary" @click="save()">儲存</button>
                 <span class="text-muted text-sm">儲存後需重啟運行才會生效</span>
@@ -93,9 +79,7 @@
                     long_interval: {{ settings.long_interval }},
                     miss_threshold: {{ settings.miss_threshold }},
                     click_delay_min: {{ settings.click_delay[0] }},
-                    click_delay_max: {{ settings.click_delay[1] }},
-                    resolution_w: {{ settings.resolution[0] }},
-                    resolution_h: {{ settings.resolution[1] }}
+                    click_delay_max: {{ settings.click_delay[1] }}
                 },
                 toastVisible: false,
                 toastMessage: '',
@@ -116,12 +100,8 @@
                             parseFloat(this.settings.click_delay_min),
                             parseFloat(this.settings.click_delay_max)
                         ],
-                        resolution: [
-                            parseInt(this.settings.resolution_w),
-                            parseInt(this.settings.resolution_h)
-                        ],
                         start_delay: 2,
-                        debug: true
+                        debug: false
                     };
 
                     const res = await fetch('/api/settings', {
