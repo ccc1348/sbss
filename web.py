@@ -106,6 +106,7 @@ class Runner:
         click_delay = settings["click_delay"]
 
         miss_count = 0
+        logged_screenshot_size = False
 
         while self.status != "stopped":
             # 截圖
@@ -114,6 +115,11 @@ class Runner:
                 self.log("截圖失敗")
                 time.sleep(loop_interval)
                 continue
+
+            # 只記錄一次截圖尺寸
+            if not logged_screenshot_size:
+                self.log(f"截圖尺寸: {screenshot.shape[1]}x{screenshot.shape[0]}")
+                logged_screenshot_size = True
 
             # 載入狀態
             states = core.get_states(self.profile_name)
@@ -251,15 +257,20 @@ class Runner:
     def _try_match(self, screenshot, state_name, config, threshold):
         """嘗試匹配單一步驟，返回 (min_score, click) 或 None"""
         template_path = core.get_template_path(state_name, self.profile_name)
-        if not template_path.exists():
-            return None
 
+        # 直接嘗試讀取，不用 exists() 檢查（Windows 中文路徑相容性）
         template = core.imread_safe(template_path)
         if template is None:
+            self.log(f"[!] {state_name}: 無法讀取模板")
             return None
+
+        # 檢查尺寸是否一致
+        if screenshot.shape[:2] != template.shape[:2]:
+            self.log(f"[!] {state_name}: 尺寸不符 截圖={screenshot.shape[1]}x{screenshot.shape[0]} 模板={template.shape[1]}x{template.shape[0]}")
 
         regions = core.get_regions(config)
         if not regions:
+            self.log(f"[!] {state_name}: 沒有設定區域")
             return None
 
         # 比對所有區域（全部通過才算匹配）
@@ -267,6 +278,11 @@ class Runner:
         for region in regions:
             frame_region = core.crop_region(screenshot, region)
             template_region = core.crop_region(template, region)
+
+            if frame_region is None or template_region is None:
+                self.log(f"[!] {state_name}: 區域 {region} 超出範圍")
+                return None
+
             score = core.match_region(frame_region, template_region)
             min_score = min(min_score, score)
             if score < threshold:
