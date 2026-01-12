@@ -11,6 +11,7 @@ import queue
 import base64
 import cv2
 import os
+import sys
 
 BASE_DIR = Path(__file__).parent
 app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
