@@ -176,13 +176,15 @@ class Runner:
                         miss_count = 0
                         break
 
-                # 防呆：如果 candidates 都不匹配，且已經到達尾端（最後都是可略過的），重新開始
+                # 防呆：如果 candidates 都不匹配，且 candidates 全部都是可略過的，重新開始
                 if not matched and candidates:
                     last_candidate_enabled_idx = next(
                         (i for i, (oi, n, c) in enumerate(enabled_states) if n == candidates[-1][1]),
                         -1
                     )
-                    if last_candidate_enabled_idx >= len(enabled_states) - 1:
+                    # 只有當 candidates 包含最後一個啟用步驟，且全部都是可略過的，才重新開始
+                    all_skippable = all(c.get("skippable", False) for _, _, c in candidates)
+                    if last_candidate_enabled_idx >= len(enabled_states) - 1 and all_skippable:
                         self.log("尾端步驟皆未匹配，重新開始")
                         self.current_step_index = -1
                         self.current_step_name = None
