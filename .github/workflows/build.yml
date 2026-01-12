@@ -34,10 +34,9 @@ jobs:
           ./python/python.exe get-pip.py --no-warn-script-location
         shell: pwsh
 
-      - name: Create venv and install dependencies
+      - name: Install dependencies
         run: |
-          ./python/python.exe -m venv venv
-          ./venv/Scripts/pip.exe install -r requirements.txt --no-warn-script-location
+          ./python/python.exe -m pip install -r requirements.txt --no-warn-script-location
         shell: pwsh
 
       - name: Download ADB platform-tools
@@ -51,7 +50,7 @@ jobs:
           @'
           @echo off
           cd /d "%~dp0"
-          start "" venv\Scripts\pythonw.exe web.py
+          start "" python\pythonw.exe web.py
           '@ | Set-Content -Path "run.bat" -Encoding ASCII
         shell: pwsh
 
@@ -59,7 +58,6 @@ jobs:
         run: |
           mkdir release
           cp -r python release/
-          cp -r venv release/
           cp -r platform-tools release/
           cp -r templates release/
           cp -r static release/
