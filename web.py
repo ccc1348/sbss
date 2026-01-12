@@ -870,7 +870,24 @@ if __name__ == "__main__":
         log("建立視窗...")
         window = webview.create_window("sbss", url, width=1200, height=800)
         log("視窗已建立，啟動 webview")
-        webview.start(on_closing)
+
+        # 檢查可用的渲染引擎
+        try:
+            from webview.platforms import winforms
+            log("渲染引擎: winforms (EdgeChromium/MSHTML)")
+        except ImportError as e:
+            log(f"winforms 不可用: {e}")
+
+        # 啟動 webview，失敗則 fallback 到瀏覽器
+        try:
+            webview.start(on_closing, debug=True)
+        except Exception as e:
+            log(f"webview 啟動失敗: {e}，改用瀏覽器")
+            import webbrowser
+            webbrowser.open(url)
+            # 保持程式運行（pythonw 無控制台）
+            while True:
+                time.sleep(1)
         log("程式結束")
 
     except Exception as e:
