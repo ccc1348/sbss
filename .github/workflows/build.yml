@@ -76,12 +76,10 @@ jobs:
           Copy-Item -Path "dist/win-unpacked/*" -Destination "release" -Recurse
 
           # 複製 Python 環境到 resources/python
-          New-Item -ItemType Directory -Force -Path "release/resources/python"
-          Copy-Item -Path "python/*" -Destination "release/resources/python" -Recurse
+          Copy-Item -Path "python" -Destination "release/resources/" -Recurse -Force
 
           # 複製 platform-tools 到 resources/platform-tools
-          New-Item -ItemType Directory -Force -Path "release/resources/platform-tools"
-          Copy-Item -Path "platform-tools/*" -Destination "release/resources/platform-tools" -Recurse
+          Copy-Item -Path "platform-tools" -Destination "release/resources/" -Recurse -Force
 
           # 確認關鍵檔案存在
           Write-Host "=== Verifying release ==="
