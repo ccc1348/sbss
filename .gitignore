@@ -3,6 +3,11 @@ venv/
 __pycache__/
 *.pyc
 
+# Node.js / Electron
+node_modules/
+dist/
+package-lock.json
+
 # macOS
 .DS_Store
 
@@ -20,3 +25,7 @@ config.json
 *.log
 startup.log
 adb.log
+
+# Build artifacts
+python/
+platform-tools/

@@ -109,11 +109,48 @@ flowchart TD
 
 ## 開發者
 
-```bash
-# 安裝
-python -m venv venv
-./venv/bin/pip install -r requirements.txt
+### 環境需求
 
-# 運行
-./venv/bin/python web.py
+- Node.js 18+
+- Python 3.9+
+
+### 安裝
+
+```bash
+# Python 依賴
+python -m venv venv
+./venv/bin/pip install -r requirements.txt   # Mac/Linux
+# 或
+venv\Scripts\pip install -r requirements.txt  # Windows
+
+# Node.js 依賴
+npm install
 ```
+
+### 啟動（開發模式）
+
+```bash
+npm start
+```
+
+這會啟動 Electron，自動執行 Flask 後端並開啟視窗。
+
+### 僅啟動 Flask（無視窗）
+
+```bash
+./venv/bin/python web.py   # Mac/Linux
+venv\Scripts\python web.py  # Windows
+```
+
+然後開啟瀏覽器訪問 http://127.0.0.1:8080
+
+### 打包 Windows 版本
+
+透過 GitHub Actions 自動打包，推送 tag 即可：
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+或手動觸發 workflow。

@@ -1,0 +1,54 @@
+{
+  "name": "sbss",
+  "version": "1.0.0",
+  "description": "Android 自動掛機工具 - 透過 ADB 截圖辨識畫面並點擊",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.sbss.app",
+    "productName": "sbss",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "web.py",
+      "core.py",
+      "run.py",
+      "requirements.txt",
+      "templates/**/*",
+      "static/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "python",
+        "to": "python",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "platform-tools",
+        "to": "platform-tools",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": "dir",
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "asar": false
+  }
+}

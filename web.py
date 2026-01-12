@@ -14,7 +14,9 @@ import os
 import sys
 
 BASE_DIR = Path(__file__).parent
-app = Flask(__name__, template_folder=str(BASE_DIR / "templates"))
+app = Flask(__name__,
+            template_folder=str(BASE_DIR / "templates"),
+            static_folder=str(BASE_DIR / "static"))
 
 # ============ 運行管理 ============
 
@@ -788,109 +790,12 @@ def find_free_port(start_port=8080, max_attempts=10):
     raise RuntimeError(f"找不到可用端口 ({start_port}-{start_port + max_attempts - 1})")
 
 
-def on_closing():
-    """視窗關閉時停止運行中的任務"""
-    if runner.status == "running":
-        runner.stop()
-
-
-def wait_for_server(url, timeout=10):
-    """等待伺服器就緒"""
-    import urllib.request
-    import urllib.error
-    start = time.time()
-    while time.time() - start < timeout:
-        try:
-            urllib.request.urlopen(url, timeout=1)
-            return True
-        except (urllib.error.URLError, ConnectionRefusedError):
-            time.sleep(0.1)
-    return False
-
-
 if __name__ == "__main__":
-    import traceback
+    # 從環境變數取得端口（Electron 會設定），否則自動尋找
+    port = int(os.environ.get("FLASK_PORT", 0)) or find_free_port(8080)
 
-    # 日誌路徑（exe 旁邊）
-    if getattr(sys, 'frozen', False):
-        base_path = Path(sys.executable).parent
-    else:
-        base_path = Path(__file__).parent
+    print(f"啟動 Flask 伺服器: http://127.0.0.1:{port}")
+    print(f"Python: {sys.version}")
 
-    log_path = base_path / "startup.log"
-
-    def log(msg):
-        """寫入啟動日誌"""
-        timestamp = time.strftime("%H:%M:%S")
-        line = f"{timestamp} {msg}\n"
-        print(line, end="")
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(line)
-
-    # 清空舊日誌
-    log_path.write_text("", encoding="utf-8")
-
-    flask_error = []
-
-    def run_flask(port):
-        """運行 Flask，捕獲錯誤"""
-        try:
-            log("Flask 線程啟動")
-            app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
-        except Exception as e:
-            flask_error.append(traceback.format_exc())
-            log(f"Flask 錯誤: {e}")
-
-    try:
-        log("程式啟動")
-        log(f"Python: {sys.version}")
-        log(f"路徑: {base_path}")
-
-        import webview
-        log(f"webview 版本: {webview.__version__ if hasattr(webview, '__version__') else 'unknown'}")
-
-        port = find_free_port(8080)
-        url = f"http://127.0.0.1:{port}"
-        log(f"使用端口: {port}")
-
-        # 在背景線程運行 Flask
-        flask_thread = threading.Thread(target=run_flask, args=(port,), daemon=True)
-        flask_thread.start()
-        log("Flask 線程已啟動")
-
-        # 等待 Flask 就緒
-        log("等待伺服器就緒...")
-        if not wait_for_server(url):
-            if flask_error:
-                raise RuntimeError(f"Flask 啟動失敗:\n{flask_error[0]}")
-            raise RuntimeError("伺服器啟動超時")
-        log("伺服器就緒")
-
-        # 開啟 PyWebView 視窗
-        log("建立視窗...")
-        window = webview.create_window("sbss", url, width=1200, height=800)
-        log("視窗已建立，啟動 webview")
-
-        # 檢查可用的渲染引擎
-        try:
-            from webview.platforms import winforms
-            log("渲染引擎: winforms (EdgeChromium/MSHTML)")
-        except ImportError as e:
-            log(f"winforms 不可用: {e}")
-
-        # 啟動 webview，失敗則 fallback 到瀏覽器
-        try:
-            webview.start(on_closing)
-        except Exception as e:
-            log(f"webview 啟動失敗: {e}，改用瀏覽器")
-            import webbrowser
-            webbrowser.open(url)
-            # 保持程式運行（pythonw 無控制台）
-            while True:
-                time.sleep(1)
-        log("程式結束")
-
-    except Exception as e:
-        log(f"錯誤: {e}")
-        log(traceback.format_exc())
-        raise
+    # 直接運行 Flask（Electron 會管理生命週期）
+    app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)

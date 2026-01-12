@@ -47,10 +47,19 @@ def get_data_dir():
 def get_adb_path():
     """取得 ADB 執行檔路徑（跨平台）"""
     if sys.platform == "win32":
-        # Windows: 優先用內嵌的 platform-tools
-        bundled = get_base_dir() / "platform-tools" / "adb.exe"
-        if bundled.exists():
-            return str(bundled)
+        base = get_base_dir()
+
+        # Windows: 檢查多個可能的內嵌位置
+        candidates = [
+            # 開發環境: 專案根目錄下
+            base / "platform-tools" / "adb.exe",
+            # Electron 打包: resources/platform-tools (web.py 在 resources/app)
+            base.parent / "platform-tools" / "adb.exe",
+        ]
+
+        for p in candidates:
+            if p.exists():
+                return str(p)
 
         # 其次檢查常見安裝位置
         common_paths = [
@@ -109,7 +118,8 @@ DATA_DIR = get_data_dir()
 SHARED_DIR = DATA_DIR / "shared"
 PROFILES_DIR = DATA_DIR / "profiles"
 ADB_PATH = get_adb_path()
-ADB_LOG_PATH = BASE_DIR / "adb.log"
+# ADB 日誌放在資料目錄（確保有寫入權限）
+ADB_LOG_PATH = DATA_DIR / "adb.log"
 
 # 確保必要目錄存在
 SHARED_DIR.mkdir(parents=True, exist_ok=True)
