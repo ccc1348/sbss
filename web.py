@@ -792,26 +792,41 @@ def wait_for_server(url, timeout=10):
 
 
 if __name__ == "__main__":
-    import webview
+    import traceback
 
-    port = find_free_port(8080)
-    url = f"http://127.0.0.1:{port}"
+    # 錯誤日誌路徑（exe 旁邊）
+    if getattr(sys, 'frozen', False):
+        log_path = Path(sys.executable).parent / "error.log"
+    else:
+        log_path = Path(__file__).parent / "error.log"
 
-    print("啟動 Web 界面...")
-    print(url)
+    try:
+        import webview
 
-    # 在背景線程運行 Flask
-    flask_thread = threading.Thread(
-        target=lambda: app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False),
-        daemon=True
-    )
-    flask_thread.start()
+        port = find_free_port(8080)
+        url = f"http://127.0.0.1:{port}"
 
-    # 等待 Flask 就緒
-    if not wait_for_server(url):
-        print("伺服器啟動超時")
-        exit(1)
+        print("啟動 Web 界面...")
+        print(url)
 
-    # 開啟 PyWebView 視窗
-    window = webview.create_window("sbss", url, width=1200, height=800)
-    webview.start(on_closing)
+        # 在背景線程運行 Flask
+        flask_thread = threading.Thread(
+            target=lambda: app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False),
+            daemon=True
+        )
+        flask_thread.start()
+
+        # 等待 Flask 就緒
+        if not wait_for_server(url):
+            raise RuntimeError("伺服器啟動超時")
+
+        # 開啟 PyWebView 視窗
+        window = webview.create_window("sbss", url, width=1200, height=800)
+        webview.start(on_closing)
+
+    except Exception as e:
+        # 寫入錯誤日誌
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(f"啟動失敗: {e}\n\n")
+            f.write(traceback.format_exc())
+        raise
