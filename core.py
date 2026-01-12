@@ -316,10 +316,13 @@ def adb_list_devices():
     列出所有已連接的 ADB 設備
     返回 [{"id": "localhost:5555", "name": "emulator-5554 (localhost:5555)"}, ...]
     """
-    result = subprocess.run(
-        [ADB_PATH, "devices"],
-        capture_output=True, text=True
-    )
+    try:
+        result = subprocess.run(
+            [ADB_PATH, "devices"],
+            capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        return []  # ADB 不存在
 
     raw_devices = []
     for line in result.stdout.strip().split("\n")[1:]:  # 跳過標題行
@@ -366,19 +369,25 @@ def adb_list_devices():
 def adb_connect(host="localhost", port=5555):
     """連接 ADB"""
     addr = f"{host}:{port}"
-    result = subprocess.run(
-        [ADB_PATH, "connect", addr],
-        capture_output=True, text=True
-    )
-    return "connected" in result.stdout.lower()
+    try:
+        result = subprocess.run(
+            [ADB_PATH, "connect", addr],
+            capture_output=True, text=True
+        )
+        return "connected" in result.stdout.lower()
+    except FileNotFoundError:
+        return False  # ADB 不存在
 
 
 def adb_get_resolution(device="localhost:5555"):
     """取得 Android 解析度"""
-    result = subprocess.run(
-        [ADB_PATH, "-s", device, "shell", "wm", "size"],
-        capture_output=True, text=True
-    )
+    try:
+        result = subprocess.run(
+            [ADB_PATH, "-s", device, "shell", "wm", "size"],
+            capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        return None, None
     if result.returncode == 0:
         for line in result.stdout.strip().split("\n"):
             if "Physical size" in line:
@@ -390,19 +399,25 @@ def adb_get_resolution(device="localhost:5555"):
 
 def adb_tap(x, y, device="localhost:5555"):
     """ADB 點擊指定座標"""
-    result = subprocess.run(
-        [ADB_PATH, "-s", device, "shell", "input", "tap", str(x), str(y)],
-        capture_output=True, text=True
-    )
-    return result.returncode == 0
+    try:
+        result = subprocess.run(
+            [ADB_PATH, "-s", device, "shell", "input", "tap", str(x), str(y)],
+            capture_output=True, text=True
+        )
+        return result.returncode == 0
+    except FileNotFoundError:
+        return False
 
 
 def adb_screenshot(device="localhost:5555"):
     """使用 ADB 截取 Android 畫面"""
-    result = subprocess.run(
-        [ADB_PATH, "-s", device, "exec-out", "screencap", "-p"],
-        capture_output=True
-    )
+    try:
+        result = subprocess.run(
+            [ADB_PATH, "-s", device, "exec-out", "screencap", "-p"],
+            capture_output=True
+        )
+    except FileNotFoundError:
+        return None
     if result.returncode != 0 or not result.stdout:
         return None
 
@@ -445,12 +460,15 @@ def adb_capture_touch(device="localhost:5555", timeout=30):
     TOUCH_MAX = 32767
 
     # 啟動 getevent
-    proc = subprocess.Popen(
-        [ADB_PATH, "-s", device, "shell", "getevent", "-l", "/dev/input/event2"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    )
+    try:
+        proc = subprocess.Popen(
+            [ADB_PATH, "-s", device, "shell", "getevent", "-l", "/dev/input/event2"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+    except FileNotFoundError:
+        return None
 
     result_queue = queue.Queue()
 
