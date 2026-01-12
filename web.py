@@ -880,7 +880,7 @@ if __name__ == "__main__":
 
         # 啟動 webview，失敗則 fallback 到瀏覽器
         try:
-            webview.start(on_closing, debug=True)
+            webview.start(on_closing)
         except Exception as e:
             log(f"webview 啟動失敗: {e}，改用瀏覽器")
             import webbrowser
