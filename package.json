@@ -22,12 +22,10 @@
     },
     "files": [
       "main.js",
-      "web.py",
-      "core.py",
-      "run.py",
+      "*.py",
       "requirements.txt",
-      "templates/**/*",
-      "static/**/*"
+      "templates/**",
+      "static/**"
     ],
     "extraResources": [
       {

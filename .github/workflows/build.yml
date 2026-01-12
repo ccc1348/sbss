@@ -83,9 +83,36 @@ jobs:
           New-Item -ItemType Directory -Force -Path "release/resources/platform-tools"
           Copy-Item -Path "platform-tools/*" -Destination "release/resources/platform-tools" -Recurse
 
-          # 確認目錄結構
-          Write-Host "=== Release structure ==="
-          Get-ChildItem -Path "release" -Recurse -Depth 2 | Select-Object FullName
+          # 確認關鍵檔案存在
+          Write-Host "=== Verifying release ==="
+          $checks = @(
+            "release/sbss.exe",
+            "release/resources/app/web.py",
+            "release/resources/app/core.py",
+            "release/resources/app/main.js",
+            "release/resources/app/templates/index.html",
+            "release/resources/app/static/css/style.css",
+            "release/resources/python/python.exe",
+            "release/resources/platform-tools/adb.exe"
+          )
+          $allOk = $true
+          foreach ($path in $checks) {
+            if (Test-Path $path) {
+              Write-Host "[OK] $path"
+            } else {
+              Write-Host "[MISSING] $path"
+              $allOk = $false
+            }
+          }
+          if (-not $allOk) {
+            Write-Host "=== Full structure ==="
+            Get-ChildItem -Path "release" -Recurse -Depth 3 | Select-Object FullName
+            exit 1
+          }
+
+          # 測試 Python 能否正常執行
+          Write-Host "=== Testing Python ==="
+          & "release/resources/python/python.exe" -c "import flask; import cv2; import numpy; print('All imports OK')"
         shell: pwsh
 
       - name: Create debug launcher
@@ -113,12 +140,23 @@ jobs:
           body: |
             ## 使用說明
 
-            1. 解壓縮 `sbss-windows.zip`
+            1. 解壓縮 `sbss-windows.zip` 到任意位置（建議避免中文路徑）
             2. 執行 `sbss.exe`
-            3. 如果無法啟動，請執行 `debug.bat` 查看錯誤訊息
+            3. 首次執行可能出現 Windows SmartScreen 警告，點擊「更多資訊」→「仍要執行」
 
             ## 錯誤排除
 
-            啟動日誌位於: `%APPDATA%/sbss/startup.log`
+            **無法啟動？**
+            - 執行 `debug.bat` 查看詳細錯誤訊息
+            - 檢查日誌: `%APPDATA%\sbss\startup.log`
+
+            **找不到設備？**
+            - 確認模擬器已啟動並開啟 ADB 功能
+            - BlueStacks: 設定 → 進階 → Android Debug Bridge
+            - 雷電/夜神: 設定 → 其他設定 → ADB 調試
+
+            **截圖失敗？**
+            - 重啟模擬器後再試
+            - 確認模擬器 ADB 端口正常（通常是 5555, 5556 等）
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
