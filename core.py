@@ -109,10 +109,18 @@ DATA_DIR = get_data_dir()
 SHARED_DIR = DATA_DIR / "shared"
 PROFILES_DIR = DATA_DIR / "profiles"
 ADB_PATH = get_adb_path()
+ADB_LOG_PATH = BASE_DIR / "adb.log"
 
 # 確保必要目錄存在
 SHARED_DIR.mkdir(parents=True, exist_ok=True)
 PROFILES_DIR.mkdir(parents=True, exist_ok=True)
+
+def adb_log(msg):
+    """寫入 ADB 除錯日誌"""
+    import time as _time
+    timestamp = _time.strftime("%H:%M:%S")
+    with open(ADB_LOG_PATH, "a", encoding="utf-8") as f:
+        f.write(f"{timestamp} {msg}\n")
 
 
 # ============ 設定載入 ============
@@ -316,13 +324,19 @@ def adb_list_devices():
     列出所有已連接的 ADB 設備
     返回 [{"id": "localhost:5555", "name": "emulator-5554 (localhost:5555)"}, ...]
     """
+    adb_log(f"adb_list_devices: ADB_PATH={ADB_PATH}")
     try:
         result = subprocess.run(
             [ADB_PATH, "devices"],
             capture_output=True, text=True
         )
-    except FileNotFoundError:
+        adb_log(f"adb_list_devices: returncode={result.returncode}, stdout={result.stdout[:200] if result.stdout else 'None'}")
+    except FileNotFoundError as e:
+        adb_log(f"adb_list_devices: FileNotFoundError - {e}")
         return []  # ADB 不存在
+    except Exception as e:
+        adb_log(f"adb_list_devices: Exception - {e}")
+        return []
 
     raw_devices = []
     for line in result.stdout.strip().split("\n")[1:]:  # 跳過標題行
@@ -375,8 +389,12 @@ def adb_connect(host="localhost", port=5555):
             capture_output=True, text=True
         )
         return "connected" in result.stdout.lower()
-    except FileNotFoundError:
-        return False  # ADB 不存在
+    except FileNotFoundError as e:
+        adb_log(f"adb_connect({addr}): FileNotFoundError - {e}")
+        return False
+    except Exception as e:
+        adb_log(f"adb_connect({addr}): Exception - {e}")
+        return False
 
 
 def adb_get_resolution(device="localhost:5555"):
@@ -386,7 +404,11 @@ def adb_get_resolution(device="localhost:5555"):
             [ADB_PATH, "-s", device, "shell", "wm", "size"],
             capture_output=True, text=True
         )
-    except FileNotFoundError:
+    except FileNotFoundError as e:
+        adb_log(f"adb_get_resolution({device}): FileNotFoundError - {e}")
+        return None, None
+    except Exception as e:
+        adb_log(f"adb_get_resolution({device}): Exception - {e}")
         return None, None
     if result.returncode == 0:
         for line in result.stdout.strip().split("\n"):
@@ -405,7 +427,11 @@ def adb_tap(x, y, device="localhost:5555"):
             capture_output=True, text=True
         )
         return result.returncode == 0
-    except FileNotFoundError:
+    except FileNotFoundError as e:
+        adb_log(f"adb_tap({x},{y},{device}): FileNotFoundError - {e}")
+        return False
+    except Exception as e:
+        adb_log(f"adb_tap({x},{y},{device}): Exception - {e}")
         return False
 
 
@@ -416,7 +442,11 @@ def adb_screenshot(device="localhost:5555"):
             [ADB_PATH, "-s", device, "exec-out", "screencap", "-p"],
             capture_output=True
         )
-    except FileNotFoundError:
+    except FileNotFoundError as e:
+        adb_log(f"adb_screenshot({device}): FileNotFoundError - {e}")
+        return None
+    except Exception as e:
+        adb_log(f"adb_screenshot({device}): Exception - {e}")
         return None
     if result.returncode != 0 or not result.stdout:
         return None
@@ -467,7 +497,11 @@ def adb_capture_touch(device="localhost:5555", timeout=30):
             stderr=subprocess.PIPE,
             text=True
         )
-    except FileNotFoundError:
+    except FileNotFoundError as e:
+        adb_log(f"adb_capture_touch({device}): FileNotFoundError - {e}")
+        return None
+    except Exception as e:
+        adb_log(f"adb_capture_touch({device}): Exception - {e}")
         return None
 
     result_queue = queue.Queue()

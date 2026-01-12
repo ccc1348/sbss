@@ -794,39 +794,69 @@ def wait_for_server(url, timeout=10):
 if __name__ == "__main__":
     import traceback
 
-    # 錯誤日誌路徑（exe 旁邊）
+    # 日誌路徑（exe 旁邊）
     if getattr(sys, 'frozen', False):
-        log_path = Path(sys.executable).parent / "error.log"
+        base_path = Path(sys.executable).parent
     else:
-        log_path = Path(__file__).parent / "error.log"
+        base_path = Path(__file__).parent
+
+    log_path = base_path / "startup.log"
+
+    def log(msg):
+        """寫入啟動日誌"""
+        timestamp = time.strftime("%H:%M:%S")
+        line = f"{timestamp} {msg}\n"
+        print(line, end="")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(line)
+
+    # 清空舊日誌
+    log_path.write_text("", encoding="utf-8")
+
+    flask_error = []
+
+    def run_flask(port):
+        """運行 Flask，捕獲錯誤"""
+        try:
+            log("Flask 線程啟動")
+            app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
+        except Exception as e:
+            flask_error.append(traceback.format_exc())
+            log(f"Flask 錯誤: {e}")
 
     try:
+        log("程式啟動")
+        log(f"Python: {sys.version}")
+        log(f"路徑: {base_path}")
+
         import webview
+        log(f"webview 版本: {webview.__version__ if hasattr(webview, '__version__') else 'unknown'}")
 
         port = find_free_port(8080)
         url = f"http://127.0.0.1:{port}"
-
-        print("啟動 Web 界面...")
-        print(url)
+        log(f"使用端口: {port}")
 
         # 在背景線程運行 Flask
-        flask_thread = threading.Thread(
-            target=lambda: app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False),
-            daemon=True
-        )
+        flask_thread = threading.Thread(target=run_flask, args=(port,), daemon=True)
         flask_thread.start()
+        log("Flask 線程已啟動")
 
         # 等待 Flask 就緒
+        log("等待伺服器就緒...")
         if not wait_for_server(url):
+            if flask_error:
+                raise RuntimeError(f"Flask 啟動失敗:\n{flask_error[0]}")
             raise RuntimeError("伺服器啟動超時")
+        log("伺服器就緒")
 
         # 開啟 PyWebView 視窗
+        log("建立視窗...")
         window = webview.create_window("sbss", url, width=1200, height=800)
+        log("視窗已建立，啟動 webview")
         webview.start(on_closing)
+        log("程式結束")
 
     except Exception as e:
-        # 寫入錯誤日誌
-        with open(log_path, "w", encoding="utf-8") as f:
-            f.write(f"啟動失敗: {e}\n\n")
-            f.write(traceback.format_exc())
+        log(f"錯誤: {e}")
+        log(traceback.format_exc())
         raise
