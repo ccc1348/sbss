@@ -15,3 +15,8 @@ profiles/
 
 # 舊版設定
 config.json
+
+# Debug logs
+*.log
+startup.log
+adb.log
