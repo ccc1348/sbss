@@ -655,8 +655,8 @@ def scan_adb_ports():
     """掃描常見 ADB 端口，找出正在監聽的"""
     import socket
     listening = []
-    # BlueStacks: 5555, 5565, 5575...  LDPlayer: 5555, 5556...  夜神: 62001...
-    for port in list(range(5555, 5600)) + [62001, 62025]:
+    # 雷電: 5554, 5556, 5558...  BlueStacks: 5555, 5565, 5575...  夜神: 62001...
+    for port in list(range(5554, 5600)) + [62001, 62025]:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(0.1)
         result = sock.connect_ex(('127.0.0.1', port))
