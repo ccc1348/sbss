@@ -22,7 +22,8 @@
     },
     "files": [
       "main.js",
-      "*.py",
+      "web.py",
+      "core.py",
       "requirements.txt",
       "templates/**",
       "static/**"
