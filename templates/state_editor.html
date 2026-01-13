@@ -49,6 +49,7 @@
                 <div class="screenshot-header">
                     <h2>截圖</h2>
                     <button class="btn btn-secondary" @click="takeScreenshot()">擷取畫面</button>
+                    <button class="btn btn-secondary" @click="testMatch()" :disabled="!canTestMatch">測試比對</button>
                 </div>
 
                 <div class="mode-buttons">
@@ -91,6 +92,31 @@
                     <div class="empty-regions" x-show="regions.length === 0">拖拽截圖選擇區域</div>
                 </div>
 
+                <div class="panel" x-show="testResult" x-transition>
+                    <h3>測試結果</h3>
+                    <div class="test-result-summary" :class="testResultClass">
+                        <div class="result-icon" x-text="testResult?.passed ? '✓' : '✗'"></div>
+                        <div class="result-text">
+                            <div x-text="testResult?.passed ? '匹配成功' : '匹配失敗'"></div>
+                            <div class="result-score"
+                                 x-text="`整體: ${(testResult?.overall_match * 100).toFixed(1)}%`"></div>
+                        </div>
+                    </div>
+                    <div class="region-scores" x-show="testResult?.regions">
+                        <template x-for="r in testResult?.regions" :key="r.index">
+                            <div class="region-score-item">
+                                <div class="color" :style="{background: regionColors[r.index % regionColors.length]}"></div>
+                                <span x-text="`區域 ${r.index + 1}`"></span>
+                                <span class="score" :class="{pass: r.score >= testResult?.threshold}"
+                                      x-text="`${(r.score * 100).toFixed(1)}%`"></span>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="test-info" x-show="testResult?.error">
+                        <span x-text="testResult?.error"></span>
+                    </div>
+                </div>
+
                 <div class="panel mt-auto">
                     <button class="btn btn-success btn-save" @click="saveState()">儲存</button>
                     <div class="help-text">
@@ -127,6 +153,16 @@
                 isDragging: false,
                 dragStart: null,
                 dragEnd: null,
+                testResult: null,
+
+                get canTestMatch() {
+                    return this.imageData && this.regions.length > 0;
+                },
+
+                get testResultClass() {
+                    if (!this.testResult) return '';
+                    return this.testResult.passed ? 'result-pass' : 'result-fail';
+                },
 
                 init() {
                     // 初始化已有區域
@@ -308,6 +344,49 @@
                 removeRegion(index) {
                     this.regions.splice(index, 1);
                     this.drawOverlays();
+                },
+
+                async testMatch() {
+                    if (!this.canTestMatch) {
+                        alert('請先截圖並選擇區域');
+                        return;
+                    }
+
+                    const device = getSelectedDevice();
+                    if (!device) {
+                        alert('請先選擇設備');
+                        return;
+                    }
+
+                    // Clear previous result
+                    this.testResult = null;
+
+                    try {
+                        const res = await fetch(`/api/profile/${encodeURIComponent(this.profileName)}/state/test-match`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                device: device,
+                                screenshot: this.imageData,
+                                regions: this.regions
+                            })
+                        });
+
+                        const data = await res.json();
+
+                        if (data.error) {
+                            this.testResult = { error: data.error, passed: false };
+                            return;
+                        }
+
+                        this.testResult = data;
+
+                    } catch (err) {
+                        this.testResult = {
+                            error: '測試失敗: ' + err.message,
+                            passed: false
+                        };
+                    }
                 },
 
                 async saveState() {

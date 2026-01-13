@@ -510,3 +510,78 @@ h1 { color: var(--text-primary); }
 .text-sm { font-size: 13px; }
 .font-mono { font-family: monospace; }
 .drag-handle { color: var(--text-muted); cursor: grab; }
+
+/* ========== Test Match Results ========== */
+.test-result-summary {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    border-radius: var(--radius);
+    margin-bottom: 15px;
+}
+
+.test-result-summary.result-pass {
+    background: rgba(46, 204, 113, 0.1);
+    border: 1px solid var(--success);
+}
+
+.test-result-summary.result-fail {
+    background: rgba(231, 76, 60, 0.1);
+    border: 1px solid var(--danger);
+}
+
+.result-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.result-pass .result-icon {
+    background: var(--success);
+    color: white;
+}
+
+.result-fail .result-icon {
+    background: var(--danger);
+    color: white;
+}
+
+.result-text { flex: 1; }
+.result-text > div:first-child { font-size: 16px; font-weight: bold; }
+.result-score { font-size: 13px; color: var(--text-secondary); margin-top: 3px; }
+
+.region-scores { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+
+.region-score-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    background: var(--bg-input);
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.region-score-item .score {
+    margin-left: auto;
+    font-family: monospace;
+    color: var(--danger);
+}
+
+.region-score-item .score.pass {
+    color: var(--success);
+}
+
+.test-info {
+    padding: 10px;
+    background: rgba(231, 76, 60, 0.1);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--danger);
+}

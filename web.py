@@ -668,6 +668,79 @@ def api_screenshot():
     return jsonify({"image": b64, "width": img.shape[1], "height": img.shape[0]})
 
 
+@app.route("/api/profile/<name>/state/test-match", methods=["POST"])
+def api_test_match(name):
+    """測試步驟匹配"""
+    data = request.json
+    device = data.get("device", "localhost:5555")
+    screenshot_b64 = data.get("screenshot")
+    regions = data.get("regions", [])
+
+    if not screenshot_b64:
+        return jsonify({"error": "缺少模板截圖"}), 400
+    if not regions:
+        return jsonify({"error": "缺少比對區域"}), 400
+
+    # Connect to device
+    if device.startswith("localhost:"):
+        port = int(device.split(":")[1])
+        if not core.adb_connect(port=port):
+            return jsonify({"error": f"無法連接設備: {device}"}), 500
+
+    # Capture current screenshot
+    current_img = core.adb_screenshot(device=device)
+    if current_img is None:
+        return jsonify({"error": "截圖失敗"}), 500
+
+    # Decode template from base64
+    import numpy as np
+    img_data = base64.b64decode(screenshot_b64)
+    img_array = np.frombuffer(img_data, dtype=np.uint8)
+    template_img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+
+    if template_img is None:
+        return jsonify({"error": "模板解碼失敗"}), 500
+
+    # Check size match
+    if current_img.shape[:2] != template_img.shape[:2]:
+        return jsonify({
+            "error": f"尺寸不符: 當前={current_img.shape[1]}x{current_img.shape[0]}, 模板={template_img.shape[1]}x{template_img.shape[0]}"
+        }), 400
+
+    # Match each region
+    settings = core.get_shared_settings()
+    threshold = settings["match_threshold"]
+
+    region_results = []
+    min_score = 1.0
+
+    for i, region in enumerate(regions):
+        frame_region = core.crop_region(current_img, region)
+        template_region = core.crop_region(template_img, region)
+
+        if frame_region is None or template_region is None:
+            return jsonify({"error": f"區域 {i+1} 超出範圍"}), 400
+
+        score = core.match_region(frame_region, template_region)
+        min_score = min(min_score, score)
+
+        region_results.append({
+            "index": i,
+            "score": float(score),
+            "coords": region
+        })
+
+    return jsonify({
+        "success": True,
+        "overall_match": float(min_score),
+        "passed": min_score >= threshold,
+        "threshold": float(threshold),
+        "regions": region_results,
+        "screenshot_size": f"{current_img.shape[1]}x{current_img.shape[0]}",
+        "template_size": f"{template_img.shape[1]}x{template_img.shape[0]}"
+    })
+
+
 # ============ 設備 API ============
 
 def scan_adb_ports():
