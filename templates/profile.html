@@ -77,6 +77,19 @@
             <button class="btn btn-outline-danger" @click="deleteProfile()">刪除腳本</button>
         </div>
 
+        <!-- 警告橫幅 -->
+        <div x-show="isOtherScriptRunning()" class="panel mb-4" style="background: rgba(231, 76, 60, 0.1); border: 1px solid var(--danger);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 24px;">⚠️</span>
+                <div>
+                    <strong style="color: var(--danger);">無法操作此腳本</strong>
+                    <div class="text-muted text-sm" style="margin-top: 4px;">
+                        腳本「<span x-text="runner.profileName"></span>」正在運行中，請先停止該腳本
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 運行控制 -->
         <div class="panel mb-4">
             <div class="flex items-center gap-4 mb-3">
@@ -87,14 +100,14 @@
                 </template>
             </div>
             <div class="flex items-center gap-4 mb-3">
-                <button class="btn btn-success" @click="startRunner()" :disabled="runner.status === 'running'">啟動</button>
-                <button class="btn btn-danger" @click="stopRunner()" :disabled="runner.status !== 'running'">停止</button>
+                <button class="btn btn-success" @click="startRunner()" :disabled="runner.status === 'running' || isOtherScriptRunning()">啟動</button>
+                <button class="btn btn-danger" @click="stopRunner()" :disabled="runner.status !== 'running' || isOtherScriptRunning()">停止</button>
                 <div class="mode-toggle" style="margin-left: auto;">
                     <label class="switch">
-                        <input type="checkbox" :checked="sequentialMode" @change="toggleSequentialMode()" :disabled="runner.status === 'running'">
+                        <input type="checkbox" :checked="sequentialMode" @change="toggleSequentialMode()" :disabled="runner.status === 'running' || isOtherScriptRunning()">
                         <span class="slider"></span>
                     </label>
-                    <label @click="if(runner.status !== 'running') toggleSequentialMode()">順序模式</label>
+                    <label @click="if(runner.status !== 'running' && !isOtherScriptRunning()) toggleSequentialMode()">順序模式</label>
                 </div>
             </div>
             <div class="log-area" x-ref="logArea">
@@ -110,62 +123,66 @@
         <!-- 狀態列表 -->
         <div class="section-header">
             <h2>步驟（執行順序）</h2>
-            <a href="/profile/{{ name }}/add" class="btn btn-primary">+ 新增步驟</a>
+            <button class="btn btn-primary" @click="window.location.href='/profile/{{ name }}/add'" :disabled="isOtherScriptRunning()">+ 新增步驟</button>
         </div>
 
         <ul class="list" id="stateList" @dragover.prevent @drop="handleDrop($event)">
-            {% if states %}
-                {% for state_name, config in states.items() %}
+            <template x-if="states.length === 0">
+                <li class="empty-state">尚無步驟，點擊「+ 新增」開始</li>
+            </template>
+            <template x-for="(state, index) in states" :key="state.name">
                 <li class="list-item draggable"
-                    draggable="true"
-                    data-name="{{ state_name }}"
-                    data-index="{{ loop.index0 }}"
-                    :class="getStepClass('{{ state_name }}', {{ loop.index0 }})"
-                    @dragstart="handleDragStart($event, '{{ state_name }}')"
-                    @dragend="handleDragEnd($event)"
-                    @dragover="handleDragOver($event)">
-                    <span class="step-index" x-show="sequentialMode">{{ loop.index }}</span>
+                    :draggable="!isOtherScriptRunning()"
+                    :class="getStepClass(state.name, index)"
+                    :style="isOtherScriptRunning() ? 'cursor: not-allowed; opacity: 0.6;' : ''"
+                    @dragstart="!isOtherScriptRunning() && handleDragStart($event, index)"
+                    @dragend="!isOtherScriptRunning() && handleDragEnd($event)"
+                    @dragover="!isOtherScriptRunning() && handleDragOver($event, index)">
+                    <span class="step-index" x-show="sequentialMode" x-text="index + 1"></span>
                     <span class="drag-handle">☰</span>
-                    <button class="toggle-btn {{ 'disabled' if not config.get('enabled', true) }}"
-                            @click="toggleState('{{ state_name }}')">
-                        {{ '✓' if config.get('enabled', true) else '' }}
+                    <button class="toggle-btn"
+                            :class="{ disabled: !state.config.enabled }"
+                            :title="state.config.enabled ? '停用功能' : '啟用功能'"
+                            :disabled="isOtherScriptRunning()"
+                            @click="toggleState(state.name)">
+                        <span x-text="state.config.enabled ? '✓' : ''"></span>
                     </button>
                     <div class="flex-1">
                         <div class="mb-2">
-                            <strong>{{ state_name }}</strong>
-                            <span class="step-badge current" x-show="runner.status === 'running' && runner.sequentialMode && runner.currentStepName === '{{ state_name }}'">已執行</span>
-                            <span class="step-badge skippable" x-show="sequentialMode && stateSkippable['{{ state_name }}']">可略過</span>
-                            <span class="step-badge repeatable" x-show="sequentialMode && stateRepeatable['{{ state_name }}']">可重複</span>
+                            <strong x-text="state.name"></strong>
+                            <span class="step-badge current" x-show="runner.status === 'running' && runner.sequentialMode && runner.currentStepName === state.name">已執行</span>
+                            <span class="step-badge skippable" x-show="sequentialMode && state.config.skippable">可略過</span>
+                            <span class="step-badge repeatable" x-show="sequentialMode && state.config.repeatable">可重複</span>
                         </div>
-                        <div class="text-muted text-sm">點擊 {{ config.get('click', []) }}</div>
+                        <div class="text-muted text-sm">點擊 <span x-text="JSON.stringify(state.config.click || [])"></span></div>
                     </div>
                     <div class="flex gap-2">
                         <button class="btn btn-secondary btn-small skippable-btn"
-                                :class="{ active: stateSkippable['{{ state_name }}'] }"
+                                :class="{ active: state.config.skippable }"
                                 x-show="sequentialMode"
-                                @click="toggleSkippable('{{ state_name }}')"
-                                :title="stateSkippable['{{ state_name }}'] ? '點擊設為必要步驟' : '點擊設為可略過'">
-                            <span x-text="stateSkippable['{{ state_name }}'] ? '可略過' : '必要'"></span>
+                                :disabled="isOtherScriptRunning()"
+                                @click="toggleSkippable(state.name)"
+                                :title="state.config.skippable ? '點擊設為必要步驟' : '點擊設為可略過'">
+                            <span x-text="state.config.skippable ? '可略過' : '必要'"></span>
                         </button>
                         <button class="btn btn-secondary btn-small repeatable-btn"
-                                :class="{ active: stateRepeatable['{{ state_name }}'] }"
+                                :class="{ active: state.config.repeatable }"
                                 x-show="sequentialMode"
-                                @click="toggleRepeatable('{{ state_name }}')"
-                                :title="stateRepeatable['{{ state_name }}'] ? '點擊設為單次執行' : '點擊設為可重複'">
-                            <span x-text="stateRepeatable['{{ state_name }}'] ? '可重複' : '單次'"></span>
+                                :disabled="isOtherScriptRunning()"
+                                @click="toggleRepeatable(state.name)"
+                                :title="state.config.repeatable ? '點擊設為單次執行' : '點擊設為可重複'">
+                            <span x-text="state.config.repeatable ? '可重複' : '單次'"></span>
                         </button>
-                        <a href="/profile/{{ name }}/edit/{{ state_name }}" class="btn btn-secondary btn-small">編輯</a>
-                        <button class="btn btn-secondary btn-small"
-                                @click="toggleState('{{ state_name }}')">
-                            {{ '停用' if config.get('enabled', true) else '啟用' }}
-                        </button>
-                        <button class="btn btn-danger btn-small" @click="deleteState('{{ state_name }}')">刪除</button>
+                        <template x-if="!isOtherScriptRunning()">
+                            <a :href="`/profile/{{ name }}/edit/${encodeURIComponent(state.name)}`" class="btn btn-secondary btn-small">編輯</a>
+                        </template>
+                        <template x-if="isOtherScriptRunning()">
+                            <button class="btn btn-secondary btn-small" disabled>編輯</button>
+                        </template>
+                        <button class="btn btn-danger btn-small" :disabled="isOtherScriptRunning()" @click="deleteState(state.name)">刪除</button>
                     </div>
                 </li>
-                {% endfor %}
-            {% else %}
-                <li class="empty-state">尚無步驟，點擊「+ 新增」開始</li>
-            {% endif %}
+            </template>
         </ul>
 
         <!-- 改名 Modal -->
@@ -190,28 +207,15 @@
 
         function profilePage() {
             const profileName = "{{ name }}";
-
-            // 初始化各步驟的 skippable 狀態
-            const initialSkippable = {
-                {% for state_name, config in states.items() %}
-                "{{ state_name }}": {{ 'true' if config.get('skippable', false) else 'false' }},
-                {% endfor %}
-            };
-
-            // 初始化各步驟的 repeatable 狀態
-            const initialRepeatable = {
-                {% for state_name, config in states.items() %}
-                "{{ state_name }}": {{ 'true' if config.get('repeatable', false) else 'false' }},
-                {% endfor %}
-            };
+            const statesData = {{ states_json|safe }};
 
             return {
                 profileName,
                 sequentialMode: {{ 'true' if sequential_mode else 'false' }},
-                stateSkippable: initialSkippable,
-                stateRepeatable: initialRepeatable,
+                states: statesData,
                 runner: {
                     status: 'stopped',
+                    profileName: null,
                     logs: [],
                     lastLogId: 0,
                     sequentialMode: false,
@@ -219,7 +223,8 @@
                     currentStepName: null,
                     stepNames: []
                 },
-                dragItem: null,
+                dragIndex: null,
+                eventSource: null,
                 renameModal: {
                     show: false,
                     newName: profileName,
@@ -228,16 +233,28 @@
                     backdropClick(e) { if (e.target === e.currentTarget) this.close(); }
                 },
 
+                getStateConfig(stateName, key, defaultValue) {
+                    const state = this.states.find(s => s.name === stateName);
+                    return state ? (state.config[key] ?? defaultValue) : defaultValue;
+                },
+
                 init() {
                     this.initSSE();
                 },
 
                 initSSE() {
+                    // Close existing connection if any
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                    }
+
                     const url = `/api/runner/stream?since=${this.runner.lastLogId}`;
-                    const eventSource = new EventSource(url);
-                    eventSource.onmessage = (event) => {
+                    this.eventSource = new EventSource(url);
+
+                    this.eventSource.onmessage = (event) => {
                         const data = JSON.parse(event.data);
                         this.runner.status = data.status;
+                        this.runner.profileName = data.profile_name;
                         this.runner.sequentialMode = data.sequential_mode;
                         this.runner.currentStepIndex = data.current_step_index;
                         this.runner.currentStepName = data.current_step_name;
@@ -257,10 +274,18 @@
                             });
                         }
                     };
-                    eventSource.onerror = () => {
-                        eventSource.close();
+
+                    this.eventSource.onerror = () => {
+                        if (this.eventSource) {
+                            this.eventSource.close();
+                            this.eventSource = null;
+                        }
                         setTimeout(() => this.initSSE(), 2000);  // 2 秒後自動重連
                     };
+                },
+
+                isOtherScriptRunning() {
+                    return this.runner.status === 'running' && this.runner.profileName !== this.profileName;
                 },
 
                 async toggleSequentialMode() {
@@ -274,8 +299,12 @@
                 },
 
                 async toggleSkippable(stateName) {
-                    const newValue = !this.stateSkippable[stateName];
-                    this.stateSkippable[stateName] = newValue;
+                    const state = this.states.find(s => s.name === stateName);
+                    if (!state) return;
+
+                    const newValue = !state.config.skippable;
+                    state.config.skippable = newValue;
+
                     await fetch(`/api/profile/${encodeURIComponent(profileName)}/state/${encodeURIComponent(stateName)}/skippable`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -284,8 +313,12 @@
                 },
 
                 async toggleRepeatable(stateName) {
-                    const newValue = !this.stateRepeatable[stateName];
-                    this.stateRepeatable[stateName] = newValue;
+                    const state = this.states.find(s => s.name === stateName);
+                    if (!state) return;
+
+                    const newValue = !state.config.repeatable;
+                    state.config.repeatable = newValue;
+
                     await fetch(`/api/profile/${encodeURIComponent(profileName)}/state/${encodeURIComponent(stateName)}/repeatable`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -367,28 +400,31 @@
                 },
 
                 // 拖拽排序
-                handleDragStart(e, name) {
-                    this.dragItem = e.target;
+                handleDragStart(e, index) {
+                    this.dragIndex = index;
                     e.target.classList.add('dragging');
                 },
 
                 handleDragEnd(e) {
                     e.target.classList.remove('dragging');
-                    this.dragItem = null;
+                    this.dragIndex = null;
                     this.saveOrder();
                 },
 
-                handleDragOver(e) {
-                    const item = e.target.closest('.list-item');
-                    if (item && item !== this.dragItem) {
-                        const rect = item.getBoundingClientRect();
-                        const mid = rect.top + rect.height / 2;
-                        if (e.clientY < mid) {
-                            item.parentNode.insertBefore(this.dragItem, item);
-                        } else {
-                            item.parentNode.insertBefore(this.dragItem, item.nextSibling);
-                        }
-                    }
+                handleDragOver(e, targetIndex) {
+                    if (this.dragIndex === null || this.dragIndex === targetIndex) return;
+
+                    // 從陣列中移除被拖曳的項目
+                    const draggedItem = this.states[this.dragIndex];
+                    this.states.splice(this.dragIndex, 1);
+
+                    // 插入到新位置
+                    // 如果往後拖，targetIndex 需要調整（因為已經移除了一個元素）
+                    const insertIndex = this.dragIndex < targetIndex ? targetIndex - 1 : targetIndex;
+                    this.states.splice(insertIndex, 0, draggedItem);
+
+                    // 更新 dragIndex
+                    this.dragIndex = insertIndex;
                 },
 
                 handleDrop(e) {
@@ -396,8 +432,7 @@
                 },
 
                 async saveOrder() {
-                    const items = document.querySelectorAll('#stateList .list-item[data-name]');
-                    const order = Array.from(items).map(item => item.dataset.name);
+                    const order = this.states.map(s => s.name);
 
                     await fetch(`/api/profile/${encodeURIComponent(profileName)}/reorder`, {
                         method: 'POST',

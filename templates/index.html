@@ -39,12 +39,16 @@
         <div class="section-title">我的腳本</div>
         <div class="grid grid-2 mb-4">
             {% for profile in profiles %}
-            <a href="/profile/{{ profile }}" class="card">
+            <a href="/profile/{{ profile }}" class="card" :style="isRunning('{{ profile }}') ? 'border: 2px solid var(--success);' : ''">
                 <div class="card-actions">
                     <button class="btn-icon" @click.prevent="renameModal.open({ name: '{{ profile }}' })">改名</button>
                     <button class="btn-icon" @click.prevent="cloneModal.open({ source: '{{ profile }}' })">複製</button>
                 </div>
-                <h3>{{ profile }}</h3>
+                <div x-show="isRunning('{{ profile }}')" style="position: absolute; top: 12px; left: 12px; display: flex; align-items: center; gap: 6px; background: var(--success); color: white; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: bold;">
+                    <div class="status-dot running" style="width: 6px; height: 6px; margin: 0; background: white;"></div>
+                    運行中
+                </div>
+                <h3 :style="isRunning('{{ profile }}') ? 'margin-top: 20px;' : ''">{{ profile }}</h3>
             </a>
             {% endfor %}
 
@@ -129,6 +133,11 @@
     <script>
         function indexPage() {
             return {
+                runner: {
+                    status: 'stopped',
+                    profileName: null
+                },
+                eventSource: null,
                 addModal: {
                     show: false,
                     name: '',
@@ -159,6 +168,37 @@
                     },
                     close() { this.show = false; this.data = {}; },
                     backdropClick(e) { if (e.target === e.currentTarget) this.close(); }
+                },
+
+                init() {
+                    this.initSSE();
+                },
+
+                initSSE() {
+                    // Close existing connection if any
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                    }
+
+                    this.eventSource = new EventSource('/api/runner/stream?since=0');
+
+                    this.eventSource.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        this.runner.status = data.status;
+                        this.runner.profileName = data.profile_name;
+                    };
+
+                    this.eventSource.onerror = () => {
+                        if (this.eventSource) {
+                            this.eventSource.close();
+                            this.eventSource = null;
+                        }
+                        setTimeout(() => this.initSSE(), 2000);
+                    };
+                },
+
+                isRunning(profileName) {
+                    return this.runner.status === 'running' && this.runner.profileName === profileName;
                 },
 
                 async createScript() {

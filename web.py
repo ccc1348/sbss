@@ -310,13 +310,21 @@ def index():
 @app.route("/profile/<name>")
 def profile_page(name):
     """Profile 詳情頁"""
+    import json
     config = core.get_profile_config(name)
     if config is None:
         return "Profile 不存在", 404
     states = core.get_states(name)
     sequential_mode = config.get("sequential_mode", False)
-    return render_template("profile.html", name=name, states=states, runner=runner,
-                          sequential_mode=sequential_mode)
+
+    # 將 states 轉換成陣列格式供 Alpine.js 使用
+    states_list = [
+        {"name": state_name, "config": cfg}
+        for state_name, cfg in states.items()
+    ]
+
+    return render_template("profile.html", name=name, states_json=json.dumps(states_list),
+                          runner=runner, sequential_mode=sequential_mode)
 
 
 @app.route("/settings")
@@ -794,7 +802,7 @@ def api_runner_status():
     return jsonify({
         "status": runner.status,
         "profile": runner.profile_name,
-        "logs": runner.get_logs(since),
+        "logs": runner.get_logs_since(since),
         "log_count": len(runner.logs),
         "sequential_mode": runner.sequential_mode,
         "current_step_index": runner.current_step_index,
@@ -830,6 +838,7 @@ def api_runner_stream():
                 new_logs = runner.get_logs_since(last_log_id)
                 data = {
                     "status": status,
+                    "profile_name": runner.profile_name,
                     "logs": new_logs,
                     "last_log_id": current_log_id,
                     "sequential_mode": runner.sequential_mode,
